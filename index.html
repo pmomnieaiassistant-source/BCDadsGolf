@@ -84,7 +84,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.1.1';
+const APP_VERSION = '0.1.3';
 const S = { user: null, me: null };
 
 // ---------- helpers
@@ -130,7 +130,8 @@ function joinScreen(msg) {
     <label>Group code</label><input id="code" type="text" autocomplete="off" autocapitalize="off">
     <label>Your name</label><input id="jname" type="text" maxlength="40" autocomplete="off">
     <p class="err" id="jerr">${esc(msg || (storageOk() ? '' : NO_STORAGE))}</p>
-    <button class="btn" id="join" style="width:100%;margin-top:8px">Join</button></div></main>`;
+    <button class="btn" id="join" style="width:100%;margin-top:8px">Join</button></div>
+    <p class="muted" style="text-align:center;font-size:12px">BC Dads Golf v${APP_VERSION}</p></main>`;
   document.getElementById('join').onclick = async (ev) => {
     const btn = ev.target, err = document.getElementById('jerr');
     err.textContent = ''; btn.disabled = true;
@@ -417,7 +418,35 @@ async function viewFeatures(r) {
       ${f.idea_id ? `<p style="margin-bottom:0"><button class="link" data-go="#/create/ideas/${f.idea_id}">See how this was decided &rarr;</button></p>` : ''}</div>`).join('')}`);
 }
 
+// ---------- getting new versions onto the phone quickly
+// A Home Screen app can sit in the background for days without reloading. So: check for a new version whenever the app
+// comes back to the front (and every 30 minutes while open). When a new version has installed, reload once, waiting
+// until nothing is being typed, posted or uploaded, so nothing you're doing gets lost.
+const hadSW = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+let swReg = null, updWait = 0, updLast = 0;
+function busy() {
+  if (document.querySelector('.sheet')) return true;
+  if ([...document.querySelectorAll('textarea, input[type=text]')].some(el => el.value.trim())) return true;
+  return [...document.querySelectorAll('button')].some(b => b.disabled && b.offsetParent);
+}
+function watchForUpdates() {
+  const check = () => { if (Date.now() - updLast < 60000) return; updLast = Date.now(); swReg.update().catch(() => {}); };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+  setInterval(() => { if (!document.hidden) check(); }, 30 * 60000);
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadSW || updWait) return; // first install: nothing to refresh
+    const go = () => { if (busy()) return; clearInterval(updWait); location.reload(); };
+    updWait = setInterval(go, 1500); go();
+  });
+}
+async function swInit() {
+  if (!('serviceWorker' in navigator)) return;
+  try { swReg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }); } catch (e) { return; }
+  watchForUpdates();
+}
+
 boot();
+swInit();
 })();
 </script>
 </body>

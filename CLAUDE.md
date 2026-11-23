@@ -36,6 +36,10 @@ Golf math (stableford points, handicap strokes, net scores) has right and wrong 
 - Database setup lives in `supabase/schema.sql`. Schema changes go in `supabase/migrations/` as new, re-runnable SQL files.
 - Deploys as static files (GitHub Pages).
 
+## Shipping
+
+Bump `APP_VERSION` in `index.html` and `VERSION` in `sw.js` with every change. The service worker uses `VERSION` to notice a new release: phones check when the app comes back to the front (and every 30 minutes), then reload once nothing is being typed or posted. If you add a new file the app needs offline, add it to `SHELL` in `sw.js`.
+
 ## Style
 
 - Mobile first. Plain words in the UI, no jargon.

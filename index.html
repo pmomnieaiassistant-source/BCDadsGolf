@@ -84,6 +84,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
+const APP_VERSION = '0.1.1';
 const S = { user: null, me: null };
 
 // ---------- helpers
@@ -100,8 +101,16 @@ function route() {
   const p = location.hash.replace(/^#\/?/, '').split('/');
   return { mode: p[0] === 'create' ? 'create' : 'use', tab: p[1] === 'features' ? 'features' : 'ideas', id: p[0] === 'create' && p[1] === 'ideas' ? p[2] : null };
 }
-const go = h => { location.hash = h; };
+// Navigate and re-render directly, so buttons work even in viewers that do not fire hashchange.
+function go(h) {
+  try { if (location.hash !== h) history.pushState(null, '', h); }
+  catch (_) { location.hash = h; return; }
+  if (S.me) render();
+}
+window.addEventListener('popstate', () => S.me && render());
 window.addEventListener('hashchange', () => S.me && render());
+function storageOk() { try { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); return true; } catch (_) { return false; } }
+const NO_STORAGE = `This browser is blocking saved sign-ins, so you will be logged out every time the page reloads. Open this page directly in Safari or Chrome (not in a private window, and not inside another app).`;
 
 // ---------- boot / join
 async function boot() {
@@ -120,7 +129,7 @@ function joinScreen(msg) {
     <p class="muted">Enter the group code and the name the dads will see.</p>
     <label>Group code</label><input id="code" type="text" autocomplete="off" autocapitalize="off">
     <label>Your name</label><input id="jname" type="text" maxlength="40" autocomplete="off">
-    <p class="err" id="jerr">${esc(msg || '')}</p>
+    <p class="err" id="jerr">${esc(msg || (storageOk() ? '' : NO_STORAGE))}</p>
     <button class="btn" id="join" style="width:100%;margin-top:8px">Join</button></div></main>`;
   document.getElementById('join').onclick = async (ev) => {
     const btn = ev.target, err = document.getElementById('jerr');
@@ -146,7 +155,8 @@ function shell(r, inner) {
   app.innerHTML = `<header><h1>BC Dads Golf</h1>
     <div class="seg"><button data-go="#/use" class="${r.mode === 'use' ? 'on' : ''}">Use</button>
     <button data-go="#/create/ideas" class="${r.mode === 'create' ? 'on' : ''}">Create</button></div></header>
-    <main>${inner}</main>
+    <main>${storageOk() ? '' : `<div class="card err">${esc(NO_STORAGE)}</div>`}${inner}
+    <p class="muted" style="text-align:center;font-size:12px">BC Dads Golf v${APP_VERSION}</p></main>
     ${r.mode === 'create' ? `<nav class="tabs"><button data-go="#/create/ideas" class="${r.tab === 'ideas' ? 'on' : ''}">Ideas</button>
     <button data-go="#/create/features" class="${r.tab === 'features' ? 'on' : ''}">Features</button></nav>` : ''}`;
 }

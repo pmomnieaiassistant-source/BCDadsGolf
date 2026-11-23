@@ -84,7 +84,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.1.1';
+const APP_VERSION = '0.1.2';
 const S = { user: null, me: null };
 
 // ---------- helpers
@@ -130,7 +130,8 @@ function joinScreen(msg) {
     <label>Group code</label><input id="code" type="text" autocomplete="off" autocapitalize="off">
     <label>Your name</label><input id="jname" type="text" maxlength="40" autocomplete="off">
     <p class="err" id="jerr">${esc(msg || (storageOk() ? '' : NO_STORAGE))}</p>
-    <button class="btn" id="join" style="width:100%;margin-top:8px">Join</button></div></main>`;
+    <button class="btn" id="join" style="width:100%;margin-top:8px">Join</button></div>
+    <p class="muted" style="text-align:center;font-size:12px">BC Dads Golf v${APP_VERSION}</p></main>`;
   document.getElementById('join').onclick = async (ev) => {
     const btn = ev.target, err = document.getElementById('jerr');
     err.textContent = ''; btn.disabled = true;

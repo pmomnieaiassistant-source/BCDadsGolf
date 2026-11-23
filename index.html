@@ -84,7 +84,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.1.3';
+const APP_VERSION = '0.1.4';
 const S = { user: null, me: null };
 
 // ---------- helpers
@@ -117,8 +117,15 @@ async function boot() {
   let { data: { session } } = await sb.auth.getSession();
   if (session) {
     S.user = session.user;
-    const { data } = await sb.from('members').select('*').eq('id', S.user.id).maybeSingle();
+    const { data, error } = await sb.from('members').select('*').eq('id', S.user.id).maybeSingle();
     if (data) { S.me = data; return render(); }
+    // A failed lookup is not the same as "not joined": say so instead of asking for the code again.
+    if (error) {
+      app.innerHTML = `<main><div class="card" style="margin-top:8vh"><h2 style="margin-top:0">Can't reach the group</h2>
+        <p class="muted">Your sign-in is saved, but the app couldn't read your profile. Pull down to refresh. If it keeps happening, tell Paul and include this: ${esc(error.message)}</p>
+        <button class="btn" onclick="location.reload()">Try again</button></div></main>`;
+      return;
+    }
   }
   joinScreen();
 }

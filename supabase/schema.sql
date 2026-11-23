@@ -270,6 +270,17 @@ drop policy if exists overview_write on public.overview;
 create policy overview_write on public.overview for update
   using (public.is_admin()) with check (public.is_admin());
 
+
+-- ---------------------------------------------------------------- permissions
+-- Signed-in members need table permissions as well as row rules. See also supabase/migrations/0002_grants.sql.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on
+  public.members, public.ideas, public.comments, public.attachments,
+  public.polls, public.poll_options, public.poll_votes,
+  public.features, public.overview
+to authenticated;
+revoke all on public.settings from anon, authenticated;
+
 -- ---------------------------------------------------------------- photo storage
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5130">
+<title>BC Dads Golf</title>
+<style>
+:root{
+  --bg:#f4f6f1; --card:#fff; --ink:#1b2a20; --muted:#667568; --line:#dfe5da;
+  --green:#1f5130; --green-ink:#fff; --accent:#c8a23a; --soft:#e8f0e6;
+  --ai:#eef3fb; --ai-line:#c9d8ee; --danger:#a63a2b;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#101712; --card:#18221b; --ink:#e8efe9; --muted:#97a69a; --line:#2a382d;
+  --green:#4c9a67; --green-ink:#08140c; --accent:#d9b44e; --soft:#1f2e23;
+  --ai:#162233; --ai-line:#2b4262; --danger:#e0725f;}
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+button,input,textarea,select{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--green);color:var(--green-ink);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px;justify-content:space-between}
+header h1{font-size:17px;margin:0;letter-spacing:.2px}
+.seg{display:flex;background:rgba(0,0,0,.22);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;color:inherit;padding:6px 16px;border-radius:999px;font-weight:600;cursor:pointer;opacity:.8}
+.seg button.on{background:var(--card);color:var(--green);opacity:1}
+main{max-width:720px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card.click{cursor:pointer}
+.card h3{margin:0 0 4px;font-size:17px}
+.muted{color:var(--muted);font-size:14px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.btn{border:1px solid var(--green);background:var(--green);color:var(--green-ink);padding:9px 16px;border-radius:10px;font-weight:600;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--green)}
+.btn.small{padding:5px 11px;font-size:14px}
+.btn:disabled{opacity:.5;cursor:default}
+.link{background:none;border:0;color:var(--green);padding:0;cursor:pointer;font-weight:600}
+.link.danger{color:var(--danger)}
+input[type=text],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+textarea{min-height:90px;resize:vertical}
+label{display:block;font-weight:600;margin:12px 0 4px;font-size:14px}
+.chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--soft);color:var(--green)}
+.chip.ready{background:#f6ecc9;color:#6d5410}.chip.building{background:#dce8fb;color:#22498c}.chip.built{background:var(--green);color:var(--green-ink)}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav.tabs button{flex:1;border:0;background:none;padding:14px 0;font-weight:700;color:var(--muted);cursor:pointer;border-top:3px solid transparent}
+nav.tabs button.on{color:var(--green);border-top-color:var(--green)}
+.ai{background:var(--ai);border:1px solid var(--ai-line);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.ai .tag{font-size:11px;font-weight:800;letter-spacing:.8px;color:#3b64a3;text-transform:uppercase}
+.ai ul{margin:6px 0 0;padding-left:20px}
+.spec{border-color:var(--accent);background:var(--card);border-left-width:5px}
+.photos{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.photos img{max-width:100%;max-height:320px;border-radius:10px;border:1px solid var(--line)}
+.photos.thumbs img{width:88px;height:88px;object-fit:cover}
+.comment{padding:10px 0;border-top:1px solid var(--line)}
+.comment.reply{margin-left:22px}
+.comment.aiq{background:var(--ai);border:1px solid var(--ai-line);border-radius:12px;padding:10px 12px;margin:8px 0}
+.body{white-space:pre-wrap;word-wrap:break-word}
+.opt{position:relative;border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:6px 0;cursor:pointer;overflow:hidden;display:flex;justify-content:space-between;gap:10px}
+.opt .bar{position:absolute;inset:0 auto 0 0;background:var(--soft);z-index:0}
+.opt span{position:relative;z-index:1}
+.opt.mine{border-color:var(--green);font-weight:700}
+.center{text-align:center;padding:48px 16px}
+.err{color:var(--danger);font-weight:600;margin-top:8px}
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:20;overflow:auto;padding:calc(16px + env(safe-area-inset-top)) 16px 40px}
+.sheet .inner{max-width:720px;margin:0 auto}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(() => {
+'use strict';
+
+const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true },
+});
+const app = document.getElementById('app');
+const S = { user: null, me: null };
+
+// ---------- helpers
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const when = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const photoUrl = path => sb.storage.from('photos').getPublicUrl(path).data.publicUrl;
+const STATUS = { open: 'Open', ready: 'Ready to build', building: 'Building', built: 'Built' };
+const chip = s => `<span class="chip ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
+const nameOf = row => row.is_ai ? 'Assistant' : (row.author?.name || 'Someone');
+const fail = e => { console.error(e); alert(e?.message || 'Something went wrong. Please try again.'); };
+
+// ---------- routing: #/use, #/create/ideas, #/create/ideas/<id>, #/create/features
+function route() {
+  const p = location.hash.replace(/^#\/?/, '').split('/');
+  return { mode: p[0] === 'create' ? 'create' : 'use', tab: p[1] === 'features' ? 'features' : 'ideas', id: p[0] === 'create' && p[1] === 'ideas' ? p[2] : null };
+}
+const go = h => { location.hash = h; };
+window.addEventListener('hashchange', () => S.me && render());
+
+// ---------- boot / join
+async function boot() {
+  let { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    S.user = session.user;
+    const { data } = await sb.from('members').select('*').eq('id', S.user.id).maybeSingle();
+    if (data) { S.me = data; return render(); }
+  }
+  joinScreen();
+}
+
+function joinScreen(msg) {
+  app.innerHTML = `<main><div class="card" style="margin-top:8vh">
+    <h2 style="margin-top:0">BC Dads Golf</h2>
+    <p class="muted">Enter the group code and the name the dads will see.</p>
+    <label>Group code</label><input id="code" type="text" autocomplete="off" autocapitalize="off">
+    <label>Your name</label><input id="jname" type="text" maxlength="40" autocomplete="off">
+    <p class="err" id="jerr">${esc(msg || '')}</p>
+    <button class="btn" id="join" style="width:100%;margin-top:8px">Join</button></div></main>`;
+  document.getElementById('join').onclick = async (ev) => {
+    const btn = ev.target, err = document.getElementById('jerr');
+    err.textContent = ''; btn.disabled = true;
+    try {
+      let { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        const r = await sb.auth.signInAnonymously();
+        if (r.error) throw new Error(/anonymous/i.test(r.error.message) ? 'Anonymous sign-ins are switched off in Supabase. See the setup steps.' : r.error.message);
+        session = r.data.session;
+      }
+      S.user = session.user;
+      const { error } = await sb.rpc('join_group', { p_code: document.getElementById('code').value.trim(), p_name: document.getElementById('jname').value });
+      if (error) throw error;
+      const { data } = await sb.from('members').select('*').eq('id', S.user.id).single();
+      S.me = data; if (!location.hash) go('#/use'); render();
+    } catch (e) { err.textContent = e.message; btn.disabled = false; }
+  };
+}
+
+// ---------- shell
+function shell(r, inner) {
+  app.innerHTML = `<header><h1>BC Dads Golf</h1>
+    <div class="seg"><button data-go="#/use" class="${r.mode === 'use' ? 'on' : ''}">Use</button>
+    <button data-go="#/create/ideas" class="${r.mode === 'create' ? 'on' : ''}">Create</button></div></header>
+    <main>${inner}</main>
+    ${r.mode === 'create' ? `<nav class="tabs"><button data-go="#/create/ideas" class="${r.tab === 'ideas' ? 'on' : ''}">Ideas</button>
+    <button data-go="#/create/features" class="${r.tab === 'features' ? 'on' : ''}">Features</button></nav>` : ''}`;
+}
+document.addEventListener('click', e => {
+  const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go); }
+});
+
+async function render() {
+  const r = route();
+  if (r.mode === 'use') {
+    return shell(r, `<div class="center"><h2>Scoring is coming</h2>
+      <p class="muted">Nothing to use yet. Head to Create to share ideas for how our golf scoring should work.</p>
+      <button class="btn" data-go="#/create/ideas">Go to Create</button></div>`);
+  }
+  shell(r, `<p class="muted">Loading...</p>`);
+  try {
+    if (r.tab === 'features') return await viewFeatures(r);
+    if (r.id) return await viewIdea(r);
+    return await viewIdeas(r);
+  } catch (e) { fail(e); }
+}
+
+// ---------- ideas list
+async function viewIdeas(r) {
+  const { data, error } = await sb.from('ideas')
+    .select('id,title,body,status,summary,created_at,author:members(name),comments(count)')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const list = data.map(i => `<div class="card click" data-go="#/create/ideas/${i.id}">
+      <div class="row spread"><h3>${esc(i.title)}</h3>${chip(i.status)}</div>
+      <div class="muted">${esc(i.author?.name)} · ${when(i.created_at)} · ${i.comments?.[0]?.count || 0} replies</div>
+      <div style="margin-top:6px">${esc(i.summary || i.body).slice(0, 160)}${(i.summary || i.body).length > 160 ? '...' : ''}</div></div>`).join('');
+  shell(r, `<div class="row spread" style="margin-bottom:12px"><h2 style="margin:0">Ideas</h2>
+      <button class="btn" id="newIdea">New idea</button></div>
+    ${list || `<div class="center muted">No ideas yet. Be the first.</div>`}`);
+  document.getElementById('newIdea').onclick = newIdeaSheet;
+}
+
+// ---------- photo picking (shared by idea + reply composers)
+function pickerHtml(id) {
+  return `<div class="row"><label class="btn ghost small" style="margin:0;cursor:pointer">Add photos
+    <input type="file" id="${id}" accept="image/*" multiple hidden></label><span class="muted" id="${id}n"></span></div>
+    <div class="photos thumbs" id="${id}p"></div>`;
+}
+function bindPicker(id) {
+  const files = [];
+  const input = document.getElementById(id);
+  input.onchange = () => {
+    for (const f of input.files) files.push(f);
+    input.value = '';
+    document.getElementById(id + 'n').textContent = files.length ? `${files.length} photo${files.length > 1 ? 's' : ''}` : '';
+    document.getElementById(id + 'p').innerHTML = files.map(f => `<img src="${URL.createObjectURL(f)}" alt="">`).join('');
+  };
+  return files;
+}
+async function shrink(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return new Promise(res => c.toBlob(res, 'image/jpeg', 0.82));
+}
+async function uploadPhotos(files, ideaId, commentId) {
+  for (const f of files) {
+    const blob = await shrink(f);
+    const path = `${S.user.id}/${crypto.randomUUID()}.jpg`;
+    const up = await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' });
+    if (up.error) throw up.error;
+    const { error } = await sb.from('attachments').insert({ idea_id: ideaId, comment_id: commentId || null, uploader_id: S.user.id, path });
+    if (error) throw error;
+  }
+}
+
+// ---------- new idea
+function newIdeaSheet() {
+  const el = document.createElement('div'); el.className = 'sheet';
+  el.innerHTML = `<div class="inner"><div class="row spread"><h2 style="margin:0">New idea</h2><button class="link" id="x">Cancel</button></div>
+    <label>Title</label><input type="text" id="t" maxlength="140" placeholder="e.g. Stableford scoring with handicaps">
+    <label>Details</label><textarea id="b" maxlength="5000" placeholder="What should it do, and why?"></textarea>
+    ${pickerHtml('ph')}<p class="err" id="e"></p>
+    <button class="btn" id="post" style="width:100%;margin-top:8px">Post idea</button></div>`;
+  document.body.appendChild(el);
+  const files = bindPicker('ph');
+  el.querySelector('#x').onclick = () => el.remove();
+  el.querySelector('#post').onclick = async ev => {
+    const btn = ev.target, title = el.querySelector('#t').value.trim();
+    if (title.length < 3) return el.querySelector('#e').textContent = 'Give it a title (at least 3 characters).';
+    btn.disabled = true; btn.textContent = 'Posting...';
+    try {
+      const { data, error } = await sb.from('ideas').insert({ author_id: S.user.id, title, body: el.querySelector('#b').value.trim() }).select('id').single();
+      if (error) throw error;
+      await uploadPhotos(files, data.id, null);
+      el.remove(); go('#/create/ideas/' + data.id);
+    } catch (e) { el.querySelector('#e').textContent = e.message; btn.disabled = false; btn.textContent = 'Post idea'; }
+  };
+}
+
+// ---------- idea detail
+async function viewIdea(r) {
+  const id = r.id;
+  const [ideaQ, attQ, pollQ, comQ] = await Promise.all([
+    sb.from('ideas').select('*, author:members(name)').eq('id', id).maybeSingle(),
+    sb.from('attachments').select('*').eq('idea_id', id).order('created_at'),
+    sb.from('polls').select('*, poll_options(id,label), poll_votes(option_id,voter_id)').eq('idea_id', id).order('created_at'),
+    sb.from('comments').select('*, author:members(name)').eq('idea_id', id).order('created_at'),
+  ]);
+  for (const q of [ideaQ, attQ, pollQ, comQ]) if (q.error) throw q.error;
+  const idea = ideaQ.data;
+  if (!idea) return shell(r, `<div class="center"><p>That idea was not found.</p><button class="btn" data-go="#/create/ideas">Back to ideas</button></div>`);
+
+  const atts = attQ.data, polls = pollQ.data, comments = comQ.data;
+  const photosFor = cid => {
+    const a = atts.filter(x => (x.comment_id || null) === cid);
+    return a.length ? `<div class="photos">${a.map(x => `<a href="${esc(photoUrl(x.path))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(photoUrl(x.path))}" alt="photo"></a>`).join('')}</div>` : '';
+  };
+  const canEdit = o => o === S.user.id || S.me.is_admin;
+
+  const questions = Array.isArray(idea.open_questions) ? idea.open_questions : [];
+  const aiBox = (idea.summary || questions.length) ? `<div class="ai"><div class="tag">AI summary</div>
+      <div class="body" style="margin-top:4px">${esc(idea.summary || '')}</div>
+      ${questions.length ? `<div class="tag" style="margin-top:10px">Still to answer</div><ul>${questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}</div>`
+    : `<div class="ai"><div class="tag">AI summary</div><div class="muted" style="margin-top:4px">The assistant has not summarized this idea yet.</div></div>`;
+  const specBox = idea.spec ? `<div class="ai spec"><div class="tag" style="color:var(--accent)">What we would implement</div><div class="body" style="margin-top:4px">${esc(idea.spec)}</div></div>` : '';
+  const builtNote = idea.status === 'built' ? `<p class="muted">Built${idea.built_version ? ' in version ' + esc(idea.built_version) : ''}. See it on the Features tab.</p>` : '';
+
+  const pollHtml = polls.map(p => {
+    const votes = p.poll_votes || [], total = votes.length;
+    const mine = votes.find(v => v.voter_id === S.user.id)?.option_id;
+    return `<div class="card"><div class="row spread"><b>${esc(p.question)}</b>${canEdit(p.created_by) ? `<button class="link danger" data-delpoll="${p.id}">Delete</button>` : ''}</div>
+      ${p.poll_options.map(o => { const n = votes.filter(v => v.option_id === o.id).length; const pct = total ? Math.round(100 * n / total) : 0;
+        return `<div class="opt ${mine === o.id ? 'mine' : ''}" data-vote="${p.id}|${o.id}"><div class="bar" style="width:${pct}%"></div><span>${esc(o.label)}</span><span>${n}</span></div>`; }).join('')}
+      <div class="muted">${total} vote${total === 1 ? '' : 's'}${mine ? ' · tap another option to change yours' : ' · tap an option to vote'}</div></div>`;
+  }).join('');
+
+  const renderComment = (c, reply) => `<div class="comment ${reply ? 'reply' : ''} ${c.is_ai && c.kind === 'question' ? 'aiq' : ''}">
+      <div class="row spread"><b>${esc(nameOf(c))}${c.is_ai ? ' <span class="chip">AI</span>' : ''}</b><span class="muted">${when(c.created_at)}</span></div>
+      <div class="body">${esc(c.body)}</div>${photosFor(c.id)}
+      <div class="row">${!reply ? `<button class="link" data-reply="${c.id}">${c.kind === 'question' ? 'Answer' : 'Reply'}</button>` : ''}
+      ${canEdit(c.author_id) && !c.is_ai || S.me.is_admin ? `<button class="link danger" data-delc="${c.id}">Delete</button>` : ''}</div></div>`;
+  const tops = comments.filter(c => !c.parent_id);
+  const thread = tops.map(c => renderComment(c, false) + comments.filter(x => x.parent_id === c.id).map(x => renderComment(x, true)).join('')).join('');
+
+  const adminBox = S.me.is_admin ? `<div class="card"><label style="margin-top:0">Status (admin)</label>
+      <select id="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>` : '';
+
+  shell(r, `<button class="link" data-go="#/create/ideas">&larr; All ideas</button>
+    <div class="row spread" style="margin:8px 0"><h2 style="margin:0">${esc(idea.title)}</h2>${chip(idea.status)}</div>
+    <div class="muted">${esc(idea.author?.name)} · ${when(idea.created_at)}
+      ${canEdit(idea.author_id) ? ` · <button class="link danger" id="delIdea">Delete</button>` : ''}</div>
+    ${builtNote}${aiBox}${specBox}
+    <div class="card"><div class="body">${esc(idea.body) || '<span class="muted">No details added.</span>'}</div>${photosFor(null)}</div>
+    ${adminBox}
+    ${pollHtml}
+    <h3>Discussion</h3>
+    <div class="card" id="thread">${thread || '<div class="muted">No replies yet.</div>'}</div>
+    <div class="card"><div class="row spread"><b id="replyLabel">Add to the discussion</b><button class="link hidden" id="cancelReply">Cancel reply</button></div>
+      <textarea id="ctext" maxlength="5000" placeholder="Share your thoughts..."></textarea>
+      ${pickerHtml('cph')}<p class="err" id="cerr"></p>
+      <div class="row" style="margin-top:8px"><button class="btn" id="send">Post</button><button class="btn ghost" id="addPoll">Add a poll</button></div></div>
+    <div class="card hidden" id="pollForm"><b>New poll</b>
+      <label>Question</label><input type="text" id="pq" maxlength="200">
+      <label>Options (one per line, 2 to 6)</label><textarea id="po" placeholder="Option A&#10;Option B"></textarea>
+      <p class="err" id="perr"></p><div class="row"><button class="btn" id="makePoll">Create poll</button><button class="link" id="cancelPoll">Cancel</button></div></div>`);
+
+  // ----- wire up
+  let parentId = null;
+  const files = bindPicker('cph');
+  const refresh = () => render();
+  const guard = async fn => { try { await fn(); } catch (e) { fail(e); } };
+
+  app.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => {
+    parentId = b.dataset.reply;
+    const who = comments.find(c => c.id === parentId);
+    document.getElementById('replyLabel').textContent = `Replying to ${nameOf(who)}`;
+    document.getElementById('cancelReply').classList.remove('hidden');
+    document.getElementById('ctext').focus();
+  });
+  document.getElementById('cancelReply').onclick = () => { parentId = null; document.getElementById('replyLabel').textContent = 'Add to the discussion'; document.getElementById('cancelReply').classList.add('hidden'); };
+
+  document.getElementById('send').onclick = ev => guard(async () => {
+    const text = document.getElementById('ctext').value.trim();
+    if (!text) return document.getElementById('cerr').textContent = 'Write something first.';
+    ev.target.disabled = true;
+    try {
+      const { data, error } = await sb.from('comments').insert({ idea_id: id, parent_id: parentId, author_id: S.user.id, body: text }).select('id').single();
+      if (error) throw error;
+      await uploadPhotos(files, id, data.id);
+      refresh();
+    } catch (e) { ev.target.disabled = false; throw e; }
+  });
+
+  app.querySelectorAll('[data-delc]').forEach(b => b.onclick = () => guard(async () => {
+    if (!confirm('Delete this comment?')) return;
+    const { error } = await sb.from('comments').delete().eq('id', b.dataset.delc); if (error) throw error; refresh();
+  }));
+  app.querySelectorAll('[data-delpoll]').forEach(b => b.onclick = () => guard(async () => {
+    if (!confirm('Delete this poll and its votes?')) return;
+    const { error } = await sb.from('polls').delete().eq('id', b.dataset.delpoll); if (error) throw error; refresh();
+  }));
+  const di = document.getElementById('delIdea');
+  if (di) di.onclick = () => guard(async () => {
+    if (!confirm('Delete this idea and everything in it?')) return;
+    const { error } = await sb.from('ideas').delete().eq('id', id); if (error) throw error; go('#/create/ideas');
+  });
+
+  app.querySelectorAll('[data-vote]').forEach(el => el.onclick = () => guard(async () => {
+    const [poll_id, option_id] = el.dataset.vote.split('|');
+    const { error } = await sb.from('poll_votes').upsert({ poll_id, option_id, voter_id: S.user.id }, { onConflict: 'poll_id,voter_id' });
+    if (error) throw error; refresh();
+  }));
+
+  document.getElementById('addPoll').onclick = () => document.getElementById('pollForm').classList.remove('hidden');
+  document.getElementById('cancelPoll').onclick = () => document.getElementById('pollForm').classList.add('hidden');
+  document.getElementById('makePoll').onclick = ev => guard(async () => {
+    const q = document.getElementById('pq').value.trim();
+    const opts = [...new Set(document.getElementById('po').value.split('\n').map(s => s.trim()).filter(Boolean))].slice(0, 6);
+    if (q.length < 3 || opts.length < 2) return document.getElementById('perr').textContent = 'Add a question and at least two different options.';
+    ev.target.disabled = true;
+    try {
+      const { data, error } = await sb.from('polls').insert({ idea_id: id, created_by: S.user.id, question: q }).select('id').single();
+      if (error) throw error;
+      const { error: e2 } = await sb.from('poll_options').insert(opts.map(label => ({ poll_id: data.id, label })));
+      if (e2) throw e2;
+      refresh();
+    } catch (e) { ev.target.disabled = false; throw e; }
+  });
+
+  const st = document.getElementById('status');
+  if (st) st.onchange = () => guard(async () => {
+    const status = st.value, patch = { status };
+    if (status === 'built') {
+      const v = prompt('Which app version is this built in? (for example 0.2)', idea.built_version || '');
+      if (v === null) return refresh();
+      patch.built_version = v.trim() || null; patch.built_at = new Date().toISOString();
+    }
+    const { error } = await sb.from('ideas').update(patch).eq('id', id); if (error) throw error;
+    if (status === 'built') {
+      const ex = await sb.from('features').select('id').eq('idea_id', id).maybeSingle();
+      if (!ex.data) { const { error: e3 } = await sb.from('features').insert({ idea_id: id, name: idea.title, description: idea.spec || idea.summary || '', version: patch.built_version }); if (e3) throw e3; }
+    }
+    refresh();
+  });
+}
+
+// ---------- features
+async function viewFeatures(r) {
+  const [ov, fs] = await Promise.all([
+    sb.from('overview').select('body,updated_at').eq('id', 1).maybeSingle(),
+    sb.from('features').select('*').order('created_at', { ascending: false }),
+  ]);
+  if (ov.error) throw ov.error; if (fs.error) throw fs.error;
+  const body = ov.data?.body;
+  shell(r, `<h2 style="margin-top:0">What the app can do</h2>
+    <div class="ai"><div class="tag">AI overview</div><div class="body" style="margin-top:4px">${body ? esc(body) : '<span class="muted">Nothing is built yet. When an idea is implemented it shows up here.</span>'}</div></div>
+    ${fs.data.map(f => `<div class="card"><div class="row spread"><h3>${esc(f.name)}</h3>${f.version ? `<span class="chip built">v${esc(f.version)}</span>` : ''}</div>
+      <div class="body">${esc(f.description)}</div>
+      ${f.idea_id ? `<p style="margin-bottom:0"><button class="link" data-go="#/create/ideas/${f.idea_id}">See how this was decided &rarr;</button></p>` : ''}</div>`).join('')}`);
+}
+
+boot();
+})();
+</script>
+</body>
+</html>

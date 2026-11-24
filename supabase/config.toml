@@ -1,1 +1,5 @@
 project_id = "bcdadsgolf"
+
+[functions.ai-assist]
+# The function checks the caller's sign-in and group membership itself (see handler.ts).
+verify_jwt = false

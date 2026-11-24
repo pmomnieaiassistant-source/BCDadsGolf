@@ -45,6 +45,16 @@ The `Database migrate` GitHub workflow (`.github/workflows/db-migrate.yml`) appl
 - Treat anything that drops or deletes data, or changes security rules or permissions, as needing extra care: say plainly what it affects and what cannot be undone.
 - Paul does not want to open GitHub or Supabase for routine changes, so do the whole loop from the session.
 
+## The AI assistant
+
+Code: `supabase/functions/ai-assist/` (`logic.ts` pure rules and prompt, `handler.ts` request flow and limits, `index.ts` wiring to Supabase and Claude). Tests: `node --test tests/ai-assist.test.mjs`. Run them before and after any change here.
+
+- It writes only: the idea's summary, open questions, spec, and its own question comments. It may move an idea between **Open** and **Ready**. It never sets Building or Built; that is Paul's call.
+- Member text only ever goes inside `<member_content>` tags as data. Its answer is forced through a fixed tool shape and re-checked in `validateAnalysis` before anything is saved. Keep it that way; never loosen these checks or put member text into the system prompt.
+- Limits (cost control): 90 s per idea, 30 runs per member per hour, 300 per day overall. Admins refreshing skip the cooldown.
+- The model defaults to `claude-haiku-5-5` (set `AI_MODEL` in Supabase to change it).
+- Deploying it uses the `Deploy AI function` workflow, with the same rule as database changes: dry runs are fine, but never deploy until Paul has approved in the chat. The API key lives in the GitHub secret `ANTHROPIC_API_KEY`; never ask for it, print it, or write it in a file.
+
 ## Shipping
 
 Bump `APP_VERSION` in `index.html` and `VERSION` in `sw.js` with every change. The service worker uses `VERSION` to notice a new release: phones check when the app comes back to the front (and every 30 minutes), then reload once nothing is being typed or posted. If you add a new file the app needs offline, add it to `SHELL` in `sw.js`.

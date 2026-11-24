@@ -84,7 +84,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.1.4';
+const APP_VERSION = '0.2.0';
 const S = { user: null, me: null };
 
 // ---------- helpers
@@ -95,6 +95,24 @@ const STATUS = { open: 'Open', ready: 'Ready to build', building: 'Building', bu
 const chip = s => `<span class="chip ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
 const nameOf = row => row.is_ai ? 'Assistant' : (row.author?.name || 'Someone');
 const fail = e => { console.error(e); alert(e?.message || 'Something went wrong. Please try again.'); };
+
+// ---------- the assistant (summaries and questions). Runs on the server; this just asks it and shows progress.
+const aiPending = new Set(), aiNote = {};
+async function askAI(ideaId, { manual = false, force = false } = {}) {
+  if (aiPending.has(ideaId)) return;
+  aiPending.add(ideaId); delete aiNote[ideaId];
+  if (route().id === ideaId) render();
+  try {
+    const { data, error } = await sb.functions.invoke('ai-assist', { body: { idea_id: ideaId, force } });
+    if (error) {
+      let msg = ''; try { msg = (await error.context.json()).error; } catch (_) {}
+      throw new Error(msg || 'The assistant is not available right now.');
+    }
+    if (manual && data?.skipped === 'cooldown') aiNote[ideaId] = 'The assistant just looked at this. Try again in a minute.';
+    if (manual && data?.skipped === 'nothing_new') aiNote[ideaId] = 'Nothing new since the last update.';
+  } catch (e) { console.warn('assistant:', e.message); if (manual) aiNote[ideaId] = e.message; }
+  finally { aiPending.delete(ideaId); if (S.me && route().id === ideaId) render(); }
+}
 
 // ---------- routing: #/use, #/create/ideas, #/create/ideas/<id>, #/create/features
 function route() {
@@ -258,6 +276,7 @@ function newIdeaSheet() {
       const { data, error } = await sb.from('ideas').insert({ author_id: S.user.id, title, body: el.querySelector('#b').value.trim() }).select('id').single();
       if (error) throw error;
       await uploadPhotos(files, data.id, null);
+      askAI(data.id);
       el.remove(); go('#/create/ideas/' + data.id);
     } catch (e) { el.querySelector('#e').textContent = e.message; btn.disabled = false; btn.textContent = 'Post idea'; }
   };
@@ -284,10 +303,12 @@ async function viewIdea(r) {
   const canEdit = o => o === S.user.id || S.me.is_admin;
 
   const questions = Array.isArray(idea.open_questions) ? idea.open_questions : [];
-  const aiBox = (idea.summary || questions.length) ? `<div class="ai"><div class="tag">AI summary</div>
-      <div class="body" style="margin-top:4px">${esc(idea.summary || '')}</div>
-      ${questions.length ? `<div class="tag" style="margin-top:10px">Still to answer</div><ul>${questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}</div>`
-    : `<div class="ai"><div class="tag">AI summary</div><div class="muted" style="margin-top:4px">The assistant has not summarized this idea yet.</div></div>`;
+  const pending = aiPending.has(id);
+  const aiBox = `<div class="ai"><div class="row spread"><div class="tag">AI summary</div>${idea.ai_updated_at ? `<span class="muted" style="font-size:12px">Updated ${when(idea.ai_updated_at)}</span>` : ''}</div>
+      ${idea.summary ? `<div class="body" style="margin-top:4px">${esc(idea.summary)}</div>` : `<div class="muted" style="margin-top:4px">The assistant has not summarized this idea yet.</div>`}
+      ${questions.length ? `<div class="tag" style="margin-top:10px">Still to answer</div><ul>${questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}
+      <div class="row" style="margin-top:10px">${pending ? '<span class="muted">The assistant is reading the discussion...</span>' : '<button class="link" id="aiRefresh">Refresh summary</button>'}
+        ${aiNote[id] ? `<span class="muted">${esc(aiNote[id])}</span>` : ''}</div></div>`;
   const specBox = idea.spec ? `<div class="ai spec"><div class="tag" style="color:var(--accent)">What we would implement</div><div class="body" style="margin-top:4px">${esc(idea.spec)}</div></div>` : '';
   const builtNote = idea.status === 'built' ? `<p class="muted">Built${idea.built_version ? ' in version ' + esc(idea.built_version) : ''}. See it on the Features tab.</p>` : '';
 
@@ -353,9 +374,11 @@ async function viewIdea(r) {
       const { data, error } = await sb.from('comments').insert({ idea_id: id, parent_id: parentId, author_id: S.user.id, body: text }).select('id').single();
       if (error) throw error;
       await uploadPhotos(files, id, data.id);
-      refresh();
+      askAI(id);
     } catch (e) { ev.target.disabled = false; throw e; }
   });
+  const rb = document.getElementById('aiRefresh');
+  if (rb) rb.onclick = () => askAI(id, { manual: true, force: true });
 
   app.querySelectorAll('[data-delc]').forEach(b => b.onclick = () => guard(async () => {
     if (!confirm('Delete this comment?')) return;
@@ -389,7 +412,7 @@ async function viewIdea(r) {
       if (error) throw error;
       const { error: e2 } = await sb.from('poll_options').insert(opts.map(label => ({ poll_id: data.id, label })));
       if (e2) throw e2;
-      refresh();
+      askAI(id, { force: true }); // a new poll is new content even though it is not a comment
     } catch (e) { ev.target.disabled = false; throw e; }
   });
 

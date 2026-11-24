@@ -52,7 +52,7 @@ jobs:
         if: ${{ inputs.baseline_version != '' && inputs.dry_run == false }}
         run: |
           [[ "$BASELINE" =~ ^[0-9]{14}$ ]] || { echo "baseline_version must be 14 digits"; exit 1; }
-          supabase migration repair --status applied "$BASELINE" --remote --password "$SUPABASE_DB_PASSWORD"
+          supabase migration repair --status applied "$BASELINE" --remote --yes --password "$SUPABASE_DB_PASSWORD"
 
       - name: Show which migrations are applied
         run: supabase migration list --remote --password "$SUPABASE_DB_PASSWORD"

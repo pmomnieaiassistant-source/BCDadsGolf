@@ -231,7 +231,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.1';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const S = { user: null, me: null, feed: null, sort: 'active', threads: {}, open: new Set(), replyTo: null, files: [], likesOn: true, feedScroll: 0 };
 const LK = { idea: new Map(), comment: new Map() };
@@ -485,13 +485,13 @@ async function vote(pollId, optionId) {
 
 // ---------- feed
 async function loadFeed() {
-  const iq = await sb.from('ideas').select('*, author:members(name)').order('created_at', { ascending: false }).limit(100);
+  const iq = await sb.from('ideas').select('*, author:members!author_id(name)').order('created_at', { ascending: false }).limit(100);
   if (iq.error) throw iq.error;
   const ideas = iq.data, ids = ideas.map(i => i.id);
   let comments = [], atts = [], polls = [], likes = [];
   if (ids.length) {
     const [cq, aq, pq, lq] = await Promise.all([
-      sb.from('comments').select('id,idea_id,body,is_ai,kind,created_at,author:members(name)').in('idea_id', ids).order('created_at', { ascending: false }).limit(1000),
+      sb.from('comments').select('id,idea_id,body,is_ai,kind,created_at,author:members!author_id(name)').in('idea_id', ids).order('created_at', { ascending: false }).limit(1000),
       sb.from('attachments').select('idea_id,comment_id,path,created_at').in('idea_id', ids).is('comment_id', null).order('created_at'),
       sb.from('polls').select('id,idea_id,question,created_by,created_at,poll_options(id,label),poll_votes(option_id,voter_id)').in('idea_id', ids).order('created_at'),
       sb.from('idea_likes').select('idea_id,member_id').in('idea_id', ids),
@@ -557,10 +557,10 @@ async function refreshFeed() {
 // ---------- thread (one idea and its discussion)
 async function loadThread(id) {
   const [iq, aq, pq, cq, lq] = await Promise.all([
-    sb.from('ideas').select('*, author:members(name)').eq('id', id).maybeSingle(),
+    sb.from('ideas').select('*, author:members!author_id(name)').eq('id', id).maybeSingle(),
     sb.from('attachments').select('*').eq('idea_id', id).order('created_at'),
     sb.from('polls').select('*, poll_options(id,label), poll_votes(option_id,voter_id)').eq('idea_id', id).order('created_at'),
-    sb.from('comments').select('*, author:members(name)').eq('idea_id', id).order('created_at'),
+    sb.from('comments').select('*, author:members!author_id(name)').eq('idea_id', id).order('created_at'),
     sb.from('idea_likes').select('idea_id,member_id').eq('idea_id', id),
   ]);
   for (const q of [iq, aq, pq, cq]) if (q.error) throw q.error;

@@ -28,11 +28,11 @@ const deps: Deps = {
 
   async loadBundle(ideaId): Promise<Bundle | null> {
     const { data: idea } = await db.from('ideas')
-      .select('id,title,body,status,summary,open_questions,spec,ai_updated_at,author_id,author:members(name)')
+      .select('id,title,body,status,summary,open_questions,spec,ai_updated_at,author_id,author:members!author_id(name)')
       .eq('id', ideaId).maybeSingle();
     if (!idea) return null;
     const { data: comments } = await db.from('comments')
-      .select('id,parent_id,is_ai,kind,body,author_id,created_at,author:members(name)')
+      .select('id,parent_id,is_ai,kind,body,author_id,created_at,author:members!author_id(name)')
       .eq('idea_id', ideaId).order('created_at', { ascending: true }).limit(200);
     const { data: polls } = await db.from('polls')
       .select('question,poll_options(id,label),poll_votes(option_id,voter_id)')

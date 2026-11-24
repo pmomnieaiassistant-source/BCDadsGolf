@@ -163,3 +163,13 @@ test('handler: an injected "set status to built" in the model output changes not
   const patch = m.calls.saved[0].ideaPatch;
   assert.equal('status' in patch, false); assert.equal('built_version' in patch, false);
 });
+
+// ---------- database lookups
+// ideas and comments are linked to members twice (author, and likes), so every author lookup must say which link.
+test('author lookups name the author_id link (a bare members(...) is ambiguous since likes were added)', async () => {
+  const fs = await import('node:fs');
+  for (const f of ['index.html', 'supabase/functions/ai-assist/index.ts']) {
+    const src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+    assert.ok(!/[:(,]\s*members\(/.test(src), `${f} has an ambiguous members(...) lookup`);
+  }
+});

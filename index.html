@@ -66,9 +66,15 @@ nav.tabs button.on{color:var(--green)}
 .prompt{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:18px;padding:10px 12px;box-shadow:var(--shadow);margin-bottom:10px;width:100%;text-align:left}
 .prompt .ptext{flex:1;background:var(--bubble);border-radius:999px;padding:9px 14px;color:var(--muted)}
 .prompt .i{color:var(--green)}
-.sortbar{display:flex;gap:6px;margin:2px 2px 10px}
-.pill{padding:6px 13px;border-radius:999px;font-size:14px;font-weight:600;color:var(--ink2);background:var(--card);border:1px solid var(--line)}
-.pill.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.feedbar{display:flex;justify-content:flex-end;position:relative;margin:-4px 0 4px}
+.sortbtn{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:13px;font-weight:600;padding:6px 6px;border-radius:10px}
+.sortbtn:active{background:var(--soft)}
+.menu{position:absolute;right:0;top:100%;z-index:15;background:var(--card);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;min-width:200px;animation:menuIn .14s ease-out}
+.menu .mh{font-size:12px;font-weight:700;color:var(--muted);padding:6px 12px 4px}
+.menu button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:11px 12px;border-radius:10px;font-weight:600;font-size:15px;text-align:left}
+.menu button:active{background:var(--soft)}
+.menu .chk{color:var(--green)}
+@keyframes menuIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
 .post{background:var(--card);border-radius:18px;padding:14px 14px 6px;margin-bottom:10px;box-shadow:var(--shadow);cursor:pointer;position:relative}
 .post.full{cursor:default;border-radius:0 0 18px 18px;margin:-10px -10px 10px;padding-top:16px}
 .p-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
@@ -231,9 +237,11 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.3.1';
+const APP_VERSION = '0.3.2';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
-const S = { user: null, me: null, feed: null, sort: 'active', threads: {}, open: new Set(), replyTo: null, files: [], likesOn: true, feedScroll: 0 };
+const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
+const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
+const S = { user: null, me: null, feed: null, sort: SORTS[savedSort] ? savedSort : 'popular', threads: {}, open: new Set(), replyTo: null, files: [], likesOn: true, feedScroll: 0 };
 const LK = { idea: new Map(), comment: new Map() };
 
 // ---------- helpers
@@ -279,6 +287,8 @@ const ICONS = {
   star: '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
   flag: '<path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  menu: '<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
 };
 const icon = (n, size) => `<svg class="i" ${size ? `style="--is:${size}px"` : ''} viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 
@@ -503,7 +513,7 @@ async function loadFeed() {
   LK.idea = setLikes('idea', likes, 'idea_id');
   for (const i of ideas) {
     const cs = comments.filter(c => c.idea_id === i.id);
-    i.ccount = cs.length; i.last = cs[0] || null;
+    i.ccount = cs.length; i.hcount = cs.filter(c => !c.is_ai).length; i.last = cs[0] || null;
     i.photos = atts.filter(a => a.idea_id === i.id).map(a => a.path);
     i.polls = polls.filter(p => p.idea_id === i.id);
     i.activity = i.last_activity_at || (cs[0] && cs[0].created_at > i.created_at ? cs[0].created_at : i.created_at);
@@ -511,13 +521,29 @@ async function loadFeed() {
   S.feed = ideas;
 }
 function feedHTML() {
-  const list = [...(S.feed || [])].sort((a, b) => S.sort === 'new'
-    ? b.created_at.localeCompare(a.created_at)
-    : new Date(b.activity) - new Date(a.activity));
+  const list = sortIdeas(S.feed || [], S.sort);
   return `<button class="prompt" data-act="new-idea">${avatar(S.me.name, 38)}<span class="ptext">What should the app do?</span>${icon('image', 22)}</button>
-    <div class="sortbar"><button class="pill ${S.sort === 'active' ? 'on' : ''}" data-sort="active">Most active</button>
-      <button class="pill ${S.sort === 'new' ? 'on' : ''}" data-sort="new">Newest</button></div>
+    <div class="feedbar"><button class="sortbtn" data-act="sort-menu" aria-label="Sort posts" aria-haspopup="true">${esc(SORTS[S.sort])}${icon('menu', 18)}</button></div>
     ${list.length ? list.map(postCard).join('') : `<div class="empty">${icon('ideas', 40)}<p>No ideas yet. Be the first to post one.</p></div>`}`;
+}
+// New: newest first. Popular: likes and comments, fading as a post goes quiet (so fresh activity lifts it again).
+// Top all time: most liked, then most discussed.
+function sortIdeas(ideas, mode) {
+  const likes = i => (LK.idea.get(i.id) || { n: 0 }).n;
+  const t = iso => new Date(iso).getTime();
+  const hot = i => (likes(i) + 2 * (i.hcount || 0) + 1) / Math.pow((Date.now() - t(i.activity || i.created_at)) / 36e5 + 2, 1.2);
+  const cmp = {
+    new: (a, b) => t(b.created_at) - t(a.created_at),
+    popular: (a, b) => hot(b) - hot(a) || t(b.created_at) - t(a.created_at),
+    top: (a, b) => likes(b) - likes(a) || (b.hcount || 0) - (a.hcount || 0) || t(b.created_at) - t(a.created_at),
+  }[mode] || ((a, b) => t(b.created_at) - t(a.created_at));
+  return [...ideas].sort(cmp);
+}
+function closeSortMenu() { document.querySelector('.menu')?.remove(); }
+function toggleSortMenu() {
+  if (document.querySelector('.menu')) return closeSortMenu();
+  document.querySelector('.feedbar')?.insertAdjacentHTML('beforeend', `<div class="menu" role="menu"><div class="mh">Sort by</div>
+    ${Object.entries(SORTS).map(([k, v]) => `<button role="menuitemradio" aria-checked="${S.sort === k}" data-sort="${k}"><span>${v}</span>${S.sort === k ? `<span class="chk">${icon('check', 18)}</span>` : ''}</button>`).join('')}</div>`);
 }
 function postCard(i) {
   const last = i.last ? `<div class="p-last">${avatar(nameOf(i.last), 24, i.last.is_ai)}<p><b>${esc(nameOf(i.last))}</b> ${esc(i.last.body)}</p></div>` : '';
@@ -837,6 +863,7 @@ async function renderFeatures(r) {
 // ---------- one tap handler for the whole app
 const ACT = {
   'new-idea': () => newIdeaSheet(),
+  'sort-menu': () => toggleSortMenu(),
   'new-poll': () => pollSheet(route().id),
   'send': () => sendComment(),
   'pick-photo': () => $('#cfile')?.click(),
@@ -853,6 +880,7 @@ const ACT = {
 };
 document.addEventListener('click', e => {
   if (G_swipedEl && Date.now() - G_swipedAt < 350 && G_swipedEl.contains(e.target)) return; // that was the end of a swipe, not a tap
+  if (!e.target.closest('.menu,.sortbtn')) closeSortMenu();
   const a = e.target.closest('[data-go],[data-act],[data-like],[data-vote],[data-reply],[data-more],[data-delpoll],[data-sort],[data-lb],[data-stop],[data-open]');
   if (!a) return;
   const d = a.dataset;
@@ -869,7 +897,10 @@ document.addEventListener('click', e => {
       const r = route(); if (r.id) { await loadThread(r.id).catch(toastFail); rerenderThread(); } else refreshFeed();
     })();
   }
-  if (d.sort) { S.sort = d.sort; const f = $('#feed'); if (f) f.innerHTML = feedHTML(); return; }
+  if (d.sort) {
+    S.sort = d.sort; try { localStorage.setItem('bdg.sort', d.sort); } catch (_) {}
+    const f = $('#feed'); if (f) f.innerHTML = feedHTML(); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
+  }
   if (d.lb) return lightbox(d.lb);
   if (d.act) return ACT[d.act] && ACT[d.act](a, e);
   if ('stop' in d) return; // taps inside a poll card do not open the idea

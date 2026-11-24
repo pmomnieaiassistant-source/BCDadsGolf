@@ -4,71 +4,218 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1f5130">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>BC Dads Golf</title>
 <style>
 :root{
-  --bg:#f4f6f1; --card:#fff; --ink:#1b2a20; --muted:#667568; --line:#dfe5da;
-  --green:#1f5130; --green-ink:#fff; --accent:#c8a23a; --soft:#e8f0e6;
-  --ai:#eef3fb; --ai-line:#c9d8ee; --danger:#a63a2b;
+  --bg:#f3f4f1; --card:#fff; --ink:#16211a; --ink2:#3d4b41; --muted:#6c7a70; --line:#e4e8e1;
+  --green:#1f5130; --green2:#2e7a4a; --on-green:#fff; --soft:#edf2ea; --bubble:#f0f2ee;
+  --ai:#eef3fc; --ai-line:#d6e2f6; --ai-ink:#2f5aa0; --like:#2e7a4a; --danger:#b3412f; --gold:#b8922a;
+  --hdr:rgba(31,81,48,.94); --sheet-bg:rgba(10,16,12,.38);
+  --shadow:0 1px 2px rgba(16,24,18,.05),0 6px 18px rgba(16,24,18,.05);
 }
 @media (prefers-color-scheme: dark){
-  :root{--bg:#101712; --card:#18221b; --ink:#e8efe9; --muted:#97a69a; --line:#2a382d;
-  --green:#4c9a67; --green-ink:#08140c; --accent:#d9b44e; --soft:#1f2e23;
-  --ai:#162233; --ai-line:#2b4262; --danger:#e0725f;}
+  :root{
+    --bg:#0d1310; --card:#151d18; --ink:#e6ede8; --ink2:#c2cdc5; --muted:#8d9b91; --line:#232e28;
+    --green:#3f8f5e; --green2:#62b382; --on-green:#06110a; --soft:#1b2620; --bubble:#1e2823;
+    --ai:#132035; --ai-line:#24375a; --ai-ink:#93b6ee; --like:#62b382; --danger:#e57a66; --gold:#d8b24e;
+    --hdr:rgba(16,40,25,.94); --sheet-bg:rgba(0,0,0,.55); --shadow:none;
+  }
 }
-*{box-sizing:border-box}
-html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{touch-action:manipulation;overscroll-behavior-y:none}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;overflow-x:hidden;overflow-x:clip}
+body.tabs{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+body.composing{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 button,input,textarea,select{font:inherit;color:inherit}
-header{position:sticky;top:0;z-index:5;background:var(--green);color:var(--green-ink);
-  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px;justify-content:space-between}
-header h1{font-size:17px;margin:0;letter-spacing:.2px}
+button{background:none;border:0;padding:0;cursor:pointer}
+svg.i{width:var(--is,20px);height:var(--is,20px);fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
+.muted{color:var(--muted)} .sm{font-size:13px} .hidden{display:none!important}
+
+/* header */
+header.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--hdr);color:#fff;
+  backdrop-filter:saturate(1.5) blur(14px);-webkit-backdrop-filter:saturate(1.5) blur(14px)}
+header.top h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+.back{display:flex;align-items:center;gap:2px;color:#fff;font-weight:600;font-size:17px;margin-left:-6px;padding:4px 6px}
 .seg{display:flex;background:rgba(0,0,0,.22);border-radius:999px;padding:3px}
-.seg button{border:0;background:transparent;color:inherit;padding:6px 16px;border-radius:999px;font-weight:600;cursor:pointer;opacity:.8}
-.seg button.on{background:var(--card);color:var(--green);opacity:1}
-main{max-width:720px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
-.card.click{cursor:pointer}
-.card h3{margin:0 0 4px;font-size:17px}
-.muted{color:var(--muted);font-size:14px}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.spread{justify-content:space-between}
-.btn{border:1px solid var(--green);background:var(--green);color:var(--green-ink);padding:9px 16px;border-radius:10px;font-weight:600;cursor:pointer}
-.btn.ghost{background:transparent;color:var(--green)}
-.btn.small{padding:5px 11px;font-size:14px}
-.btn:disabled{opacity:.5;cursor:default}
-.link{background:none;border:0;color:var(--green);padding:0;cursor:pointer;font-weight:600}
-.link.danger{color:var(--danger)}
-input[type=text],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
-textarea{min-height:90px;resize:vertical}
-label{display:block;font-weight:600;margin:12px 0 4px;font-size:14px}
-.chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--soft);color:var(--green)}
-.chip.ready{background:#f6ecc9;color:#6d5410}.chip.building{background:#dce8fb;color:#22498c}.chip.built{background:var(--green);color:var(--green-ink)}
-nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);
-  padding-bottom:env(safe-area-inset-bottom);z-index:5}
-nav.tabs button{flex:1;border:0;background:none;padding:14px 0;font-weight:700;color:var(--muted);cursor:pointer;border-top:3px solid transparent}
-nav.tabs button.on{color:var(--green);border-top-color:var(--green)}
-.ai{background:var(--ai);border:1px solid var(--ai-line);border-radius:14px;padding:12px 14px;margin-bottom:12px}
-.ai .tag{font-size:11px;font-weight:800;letter-spacing:.8px;color:#3b64a3;text-transform:uppercase}
-.ai ul{margin:6px 0 0;padding-left:20px}
-.spec{border-color:var(--accent);background:var(--card);border-left-width:5px}
-.photos{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
-.photos img{max-width:100%;max-height:320px;border-radius:10px;border:1px solid var(--line)}
-.photos.thumbs img{width:88px;height:88px;object-fit:cover}
-.comment{padding:10px 0;border-top:1px solid var(--line)}
-.comment.reply{margin-left:22px}
-.comment.aiq{background:var(--ai);border:1px solid var(--ai-line);border-radius:12px;padding:10px 12px;margin:8px 0}
-.body{white-space:pre-wrap;word-wrap:break-word}
-.opt{position:relative;border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:6px 0;cursor:pointer;overflow:hidden;display:flex;justify-content:space-between;gap:10px}
-.opt .bar{position:absolute;inset:0 auto 0 0;background:var(--soft);z-index:0}
-.opt span{position:relative;z-index:1}
-.opt.mine{border-color:var(--green);font-weight:700}
-.center{text-align:center;padding:48px 16px}
-.err{color:var(--danger);font-weight:600;margin-top:8px}
-.sheet{position:fixed;inset:0;background:var(--bg);z-index:20;overflow:auto;padding:calc(16px + env(safe-area-inset-top)) 16px 40px}
-.sheet .inner{max-width:720px;margin:0 auto}
-.hidden{display:none!important}
+.seg button{color:#fff;padding:6px 15px;border-radius:999px;font-weight:600;font-size:14px;opacity:.8;transition:background .2s,color .2s}
+.seg button.on{background:#fff;color:#1f5130;opacity:1}
+
+main{max-width:640px;margin:0 auto;padding:10px 10px 16px;overflow-x:clip} /* swipes slide things sideways; never let them widen the page */
+.foot{text-align:center;font-size:12px;color:var(--muted);margin:18px 0 6px}
+
+/* bottom tabs */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 0 7px;font-size:11px;font-weight:600;color:var(--muted)}
+nav.tabs button.on{color:var(--green)}
+
+/* avatars */
+.av{width:var(--s);height:var(--s);border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-weight:700;
+  font-size:calc(var(--s)*.42);background:hsl(var(--h) 38% 42%);user-select:none}
+.av.ai{background:linear-gradient(135deg,#4f7fd6,#7a5cd6);color:#fff}
+
+/* feed */
+.ptr{height:0;overflow:hidden;display:grid;place-items:center;color:var(--muted);transition:height .2s}
+.ptr svg{transition:transform .2s}
+.ptr.arm svg{transform:rotate(180deg);color:var(--green)}
+.ptr.spin svg{animation:spin .8s linear infinite;color:var(--green)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.prompt{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:18px;padding:10px 12px;box-shadow:var(--shadow);margin-bottom:10px;width:100%;text-align:left}
+.prompt .ptext{flex:1;background:var(--bubble);border-radius:999px;padding:9px 14px;color:var(--muted)}
+.prompt .i{color:var(--green)}
+.sortbar{display:flex;gap:6px;margin:2px 2px 10px}
+.pill{padding:6px 13px;border-radius:999px;font-size:14px;font-weight:600;color:var(--ink2);background:var(--card);border:1px solid var(--line)}
+.pill.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.post{background:var(--card);border-radius:18px;padding:14px 14px 6px;margin-bottom:10px;box-shadow:var(--shadow);cursor:pointer;position:relative}
+.post.full{cursor:default;border-radius:0 0 18px 18px;margin:-10px -10px 10px;padding-top:16px}
+.p-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.p-who{display:flex;flex-direction:column;line-height:1.25;min-width:0;flex:1}
+.p-who b{font-size:15px}
+.p-who span{font-size:13px;color:var(--muted)}
+.p-title{font-size:17px;margin:0 0 4px;line-height:1.3}
+.p-body{margin:0 0 8px;white-space:pre-wrap;word-wrap:break-word;color:var(--ink2)}
+.clamp{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.ph{display:grid;gap:3px;border-radius:14px;overflow:hidden;margin:6px 0 8px}
+.ph.n2,.ph.n3,.ph.n4{grid-template-columns:1fr 1fr}
+.ph img{width:100%;height:100%;object-fit:cover;display:block;background:var(--soft)}
+.ph.n1 img{max-height:420px}
+.ph.n2 img,.ph.n3 img,.ph.n4 img{aspect-ratio:1}
+.ph.n3 img:first-child{grid-row:span 2;aspect-ratio:auto}
+.ph .more{position:relative}
+.ph .more::after{content:attr(data-more);position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.45);color:#fff;font-size:22px;font-weight:700}
+.teaser{display:flex;gap:7px;align-items:flex-start;background:var(--ai);color:var(--ink2);border-radius:12px;padding:8px 10px;font-size:14px;margin:4px 0 8px}
+.teaser .i{color:var(--ai-ink);margin-top:2px}
+.teaser span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.p-actions{display:flex;align-items:center;gap:4px;border-top:1px solid var(--line);margin:4px -6px 0;padding-top:2px}
+.act{display:flex;align-items:center;gap:6px;padding:9px 10px;border-radius:10px;color:var(--muted);font-weight:600;font-size:14px;min-width:44px}
+.act:active{background:var(--soft)}
+.act.on{color:var(--like)}
+.act.on svg{fill:currentColor}
+.spacer{flex:1}
+.p-last{display:flex;gap:8px;align-items:flex-start;padding:8px 0 8px;border-top:1px solid var(--line)}
+.p-last p{margin:0;font-size:14px;color:var(--ink2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--green);vertical-align:1px}
+.chip.ready{background:#f6ecc9;color:#6d5410}.chip.building{background:#dce8fb;color:#22498c}.chip.built{background:var(--green);color:var(--on-green)}
+.empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.pop{animation:pop .35s ease}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
+.burst{position:absolute;left:50%;top:50%;color:var(--like);pointer-events:none;animation:burst .7s ease forwards;z-index:3}
+.burst svg{fill:currentColor;width:64px;height:64px}
+@keyframes burst{0%{transform:translate(-50%,-50%) scale(.3);opacity:0}25%{transform:translate(-50%,-50%) scale(1.1);opacity:.95}100%{transform:translate(-50%,-70%) scale(1);opacity:0}}
+
+/* polls */
+.poll{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:6px 0 8px;cursor:default}
+.poll-q{display:flex;justify-content:space-between;gap:8px;font-weight:700;margin-bottom:4px}
+.opt{position:relative;border-radius:10px;padding:9px 12px;margin:6px 0;overflow:hidden;display:flex;justify-content:space-between;gap:10px;background:var(--bubble);cursor:pointer;width:100%;text-align:left}
+.opt .bar{position:absolute;inset:0 auto 0 0;background:color-mix(in srgb,var(--green) 18%,transparent);transition:width .35s}
+.opt span{position:relative}
+.opt.mine{font-weight:700;box-shadow:inset 0 0 0 2px var(--green)}
+
+/* thread */
+.slide-in{animation:slideIn .22s ease-out}
+@keyframes slideIn{from{transform:translateX(26px);opacity:.4}to{transform:none;opacity:1}}
+.card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.ai-card{background:var(--ai);border:1px solid var(--ai-line);border-radius:18px;padding:12px 14px;margin-bottom:10px}
+.ai-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.ai-head b{color:var(--ai-ink);font-size:14px}
+.ai-card ul{margin:6px 0 0;padding-left:20px}
+.ai-card li{margin:3px 0}
+.label{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--ai-ink);margin-top:10px}
+.ai-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:14px}
+.linkbtn{display:inline-flex;align-items:center;gap:5px;color:var(--ai-ink);font-weight:700}
+.reading{display:inline-flex;align-items:center;gap:8px;color:var(--ai-ink)}
+.dots i{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:3px;animation:dot 1s infinite}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.spec{background:var(--card);border-left:4px solid var(--gold)}
+.admin{display:flex;align-items:center;gap:10px}
+.admin select{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.c-title{font-size:15px;margin:16px 4px 6px;color:var(--ink2)}
+.comments{background:var(--card);border-radius:18px;padding:6px 10px 8px;box-shadow:var(--shadow);overflow-x:clip}
+.c-row{position:relative;touch-action:pan-y;padding:6px 0}
+.c-row.reply{margin-left:42px}
+.c-main{display:flex;gap:8px;align-items:flex-start;transition:transform .2s ease;position:relative;z-index:1;background:var(--card)}
+.c-col{min-width:0;flex:1}
+.bubble{display:inline-block;max-width:100%;background:var(--bubble);border-radius:18px;padding:8px 12px;position:relative;word-wrap:break-word}
+.bubble.ai{background:var(--ai);border:1px solid var(--ai-line)}
+.bubble b{font-size:14px}
+.bubble .tag{font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--ai-ink);margin-left:4px}
+.c-text{white-space:pre-wrap;font-size:15px}
+.bubble .ph{margin:6px 0 2px;max-width:260px}
+.c-meta{display:flex;gap:14px;font-size:13px;color:var(--muted);font-weight:600;padding:3px 12px 0}
+.c-meta button{color:var(--muted);font-weight:600}
+.c-meta button.on{color:var(--like)}
+.c-likes{position:absolute;right:-6px;bottom:-9px;background:var(--card);border-radius:999px;box-shadow:0 1px 3px rgba(0,0,0,.15);padding:1px 6px;font-size:12px;display:flex;align-items:center;gap:3px;color:var(--like)}
+.c-likes svg{fill:currentColor;--is:12px}
+.sw{position:absolute;top:50%;transform:translateY(-50%) scale(.7);opacity:0;transition:opacity .15s,transform .15s;color:var(--muted)}
+.sw.r{left:6px}.sw.l{right:6px;color:var(--danger)}
+.c-row.arm-r .sw.r,.c-row.arm-l .sw.l{opacity:1;transform:translateY(-50%) scale(1);color:var(--green)}
+.c-row.arm-l .sw.l{color:var(--danger)}
+.morebtn{margin:2px 0 4px 42px;font-size:13px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
+.morebtn::before{content:"";width:22px;height:1px;background:var(--muted)}
+.hint{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 0}
+
+/* composer */
+.composer{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);border-top:1px solid var(--line);padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+.composer .inner{max-width:640px;margin:0 auto;min-width:0}
+.replying{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted);padding:0 6px 6px}
+.c-bar{display:flex;align-items:flex-end;gap:6px;min-width:0}
+.icb{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--green);flex:none}
+.icb:active{background:var(--soft)}
+#ctext{flex:1;min-width:0;width:100%;resize:none;border:1px solid var(--line);background:var(--bubble);border-radius:20px;padding:9px 14px;max-height:120px;line-height:1.35;outline:none}
+.send{background:var(--green);color:var(--on-green)}
+.send:disabled{opacity:.35}
+.thumbs{display:flex;gap:6px;padding:0 4px 6px;flex-wrap:wrap}
+.thumbs div{position:relative}
+.thumbs img{width:56px;height:56px;object-fit:cover;border-radius:10px;display:block}
+.thumbs button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--card);display:grid;place-items:center}
+
+/* sheets */
+.sheet-bg{position:fixed;inset:0;z-index:50;background:var(--sheet-bg);opacity:0;transition:opacity .22s}
+.sheet-bg.in{opacity:1}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:92vh;overflow:auto;background:var(--card);border-radius:20px 20px 0 0;
+  padding:6px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform .25s cubic-bezier(.2,.8,.2,1);max-width:640px;margin:0 auto}
+.sheet-bg.in .sheet{transform:none}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 8px}
+.sh-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.sh-head h2{font-size:17px;margin:0}
+.sh-head .cancel{color:var(--muted);font-weight:600}
+.btn{background:var(--green);color:var(--on-green);border-radius:999px;padding:8px 18px;font-weight:700}
+.btn:disabled{opacity:.45}
+.btn.ghost{background:var(--soft);color:var(--green)}
+.field{width:100%;border:0;background:transparent;outline:none;padding:8px 2px}
+.field.title{font-size:20px;font-weight:700}
+textarea.field{min-height:120px;resize:none}
+.sheet .row{display:flex;gap:8px;align-items:center}
+.opt-in{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:5px 0;background:var(--bubble);outline:none}
+.err{color:var(--danger);font-weight:600;font-size:14px;min-height:1em;margin:6px 0}
+
+/* lightbox, toast, skeleton */
+.lb{position:fixed;inset:0;z-index:60;background:#000;display:grid;place-items:center;opacity:0;transition:opacity .2s}
+.lb.in{opacity:1}
+.lb img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .2s}
+#toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--ink);color:var(--card);
+  padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:all .25s;z-index:70;max-width:90vw;text-align:center;pointer-events:none}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.sk{background:linear-gradient(90deg,var(--soft) 25%,var(--line) 50%,var(--soft) 75%);background-size:200% 100%;animation:sk 1.2s infinite;border-radius:8px}
+@keyframes sk{to{background-position:-200% 0}}
+
+/* join, use, features */
+.join{max-width:420px;margin:10vh auto 0;padding:0 6px}
+.join h2{font-size:26px;margin:0 0 4px}
+.join input{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);margin:6px 0;outline:none}
+.join label{display:block;font-weight:700;font-size:14px;margin-top:12px}
+.join .btn{width:100%;padding:13px;margin-top:12px;font-size:16px}
+.use{text-align:center;padding:12vh 24px}
+.use .flag{width:72px;height:72px;border-radius:50%;background:var(--soft);color:var(--green);display:grid;place-items:center;margin:0 auto 14px}
+.use h2{margin:0 0 6px}
+.f-card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.f-card h3{margin:0 0 4px;font-size:16px}
+.f-link{display:inline-flex;align-items:center;gap:4px;color:var(--green);font-weight:700;font-size:14px;margin-top:8px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -84,24 +231,88 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.2.0';
-const S = { user: null, me: null };
+const APP_VERSION = '0.3.0';
+// feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
+const S = { user: null, me: null, feed: null, sort: 'active', threads: {}, open: new Set(), replyTo: null, files: [], likesOn: true, feedScroll: 0 };
+const LK = { idea: new Map(), comment: new Map() };
 
 // ---------- helpers
+const $ = (q, el = document) => el.querySelector(q);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const when = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const photoUrl = path => sb.storage.from('photos').getPublicUrl(path).data.publicUrl;
 const STATUS = { open: 'Open', ready: 'Ready to build', building: 'Building', built: 'Built' };
 const chip = s => `<span class="chip ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
 const nameOf = row => row.is_ai ? 'Assistant' : (row.author?.name || 'Someone');
-const fail = e => { console.error(e); alert(e?.message || 'Something went wrong. Please try again.'); };
+const uid = () => S.user?.id;
+const toastFail = e => { console.error(e); toast(e?.message || 'Something went wrong. Please try again.'); };
+const haptic = () => { try { navigator.vibrate && navigator.vibrate(8); } catch (_) {} };
+
+function ago(iso) {
+  const d = new Date(iso), s = (Date.now() - d.getTime()) / 1000;
+  if (s < 60) return 'now';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  if (s < 604800) return Math.floor(s / 86400) + 'd';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+function hue(name) { let h = 7; for (const ch of String(name || '?')) h = (h * 31 + ch.codePointAt(0)) % 360; return h; }
+function avatar(name, size = 40, ai = false) {
+  if (ai) return `<span class="av ai" style="--s:${size}px">${icon('sparkle', Math.round(size * .5))}</span>`;
+  const n = String(name || '?').trim();
+  return `<span class="av" style="--s:${size}px;--h:${hue(n)}">${esc(([...n][0] || '?').toUpperCase())}</span>`;
+}
+const ICONS = {
+  thumb: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
+  chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  back: '<path d="m15 18-6-6 6-6"/>',
+  right: '<path d="m9 18 6-6-6-6"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  poll: '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  sparkle: '<path d="M9.9 15.5A2 2 0 0 0 8.5 14l-6.1-1.6a.5.5 0 0 1 0-1L8.5 10A2 2 0 0 0 10 8.5l1.6-6.1a.5.5 0 0 1 1 0L14 8.5a2 2 0 0 0 1.5 1.5l6.1 1.6a.5.5 0 0 1 0 1L15.5 14a2 2 0 0 0-1.5 1.5l-1.6 6.1a.5.5 0 0 1-1 0z"/>',
+  reply: '<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  refresh: '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>',
+  down: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  ideas: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/>',
+  star: '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+  flag: '<path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+};
+const icon = (n, size) => `<svg class="i" ${size ? `style="--is:${size}px"` : ''} viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+
+function toast(msg) {
+  let t = $('#toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ---------- routing: #/use, #/create/ideas, #/create/ideas/<id>, #/create/features
+function route() {
+  const p = location.hash.replace(/^#\/?/, '').split('/');
+  return { mode: p[0] === 'create' ? 'create' : 'use', tab: p[1] === 'features' ? 'features' : 'ideas', id: p[0] === 'create' && p[1] === 'ideas' ? (p[2] || null) : null };
+}
+// Navigate and re-render directly, so buttons work even in viewers that do not fire hashchange.
+function go(h) {
+  try { if (location.hash !== h) history.pushState(null, '', h); }
+  catch (_) { location.hash = h; return; }
+  if (S.me) render();
+}
+window.addEventListener('popstate', () => S.me && render());
+window.addEventListener('hashchange', () => S.me && render());
+window.addEventListener('scroll', () => { if ($('#feed')) S.feedScroll = window.scrollY; }, { passive: true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.me && !$('.sheet-bg')) render(); });
+function storageOk() { try { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); return true; } catch (_) { return false; } }
+const NO_STORAGE = `This browser is blocking saved sign-ins, so you will be logged out every time the page reloads. Open this page directly in Safari or Chrome (not in a private window, and not inside another app).`;
 
 // ---------- the assistant (summaries and questions). Runs on the server; this just asks it and shows progress.
 const aiPending = new Set(), aiNote = {};
 async function askAI(ideaId, { manual = false, force = false } = {}) {
   if (aiPending.has(ideaId)) return;
   aiPending.add(ideaId); delete aiNote[ideaId];
-  if (route().id === ideaId) render();
+  if (route().id === ideaId) rerenderThread();
   try {
     const { data, error } = await sb.functions.invoke('ai-assist', { body: { idea_id: ideaId, force } });
     if (error) {
@@ -114,22 +325,6 @@ async function askAI(ideaId, { manual = false, force = false } = {}) {
   finally { aiPending.delete(ideaId); if (S.me && route().id === ideaId) render(); }
 }
 
-// ---------- routing: #/use, #/create/ideas, #/create/ideas/<id>, #/create/features
-function route() {
-  const p = location.hash.replace(/^#\/?/, '').split('/');
-  return { mode: p[0] === 'create' ? 'create' : 'use', tab: p[1] === 'features' ? 'features' : 'ideas', id: p[0] === 'create' && p[1] === 'ideas' ? p[2] : null };
-}
-// Navigate and re-render directly, so buttons work even in viewers that do not fire hashchange.
-function go(h) {
-  try { if (location.hash !== h) history.pushState(null, '', h); }
-  catch (_) { location.hash = h; return; }
-  if (S.me) render();
-}
-window.addEventListener('popstate', () => S.me && render());
-window.addEventListener('hashchange', () => S.me && render());
-function storageOk() { try { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); return true; } catch (_) { return false; } }
-const NO_STORAGE = `This browser is blocking saved sign-ins, so you will be logged out every time the page reloads. Open this page directly in Safari or Chrome (not in a private window, and not inside another app).`;
-
 // ---------- boot / join
 async function boot() {
   let { data: { session } } = await sb.auth.getSession();
@@ -139,7 +334,7 @@ async function boot() {
     if (data) { S.me = data; return render(); }
     // A failed lookup is not the same as "not joined": say so instead of asking for the code again.
     if (error) {
-      app.innerHTML = `<main><div class="card" style="margin-top:8vh"><h2 style="margin-top:0">Can't reach the group</h2>
+      app.innerHTML = `<main><div class="join card"><h2>Can't reach the group</h2>
         <p class="muted">Your sign-in is saved, but the app couldn't read your profile. Pull down to refresh. If it keeps happening, tell Paul and include this: ${esc(error.message)}</p>
         <button class="btn" onclick="location.reload()">Try again</button></div></main>`;
       return;
@@ -149,14 +344,16 @@ async function boot() {
 }
 
 function joinScreen(msg) {
-  app.innerHTML = `<main><div class="card" style="margin-top:8vh">
-    <h2 style="margin-top:0">BC Dads Golf</h2>
-    <p class="muted">Enter the group code and the name the dads will see.</p>
-    <label>Group code</label><input id="code" type="text" autocomplete="off" autocapitalize="off">
-    <label>Your name</label><input id="jname" type="text" maxlength="40" autocomplete="off">
+  document.body.className = '';
+  app.innerHTML = `<main><div class="join">
+    <div class="use" style="padding:0 0 10px"><div class="flag">${icon('flag', 34)}</div></div>
+    <h2>BC Dads Golf</h2>
+    <p class="muted" style="margin:0">Enter the group code and the name the dads will see.</p>
+    <label for="code">Group code</label><input id="code" type="text" autocomplete="off" autocapitalize="off">
+    <label for="jname">Your name</label><input id="jname" type="text" maxlength="40" autocomplete="off">
     <p class="err" id="jerr">${esc(msg || (storageOk() ? '' : NO_STORAGE))}</p>
-    <button class="btn" id="join" style="width:100%;margin-top:8px">Join</button></div>
-    <p class="muted" style="text-align:center;font-size:12px">BC Dads Golf v${APP_VERSION}</p></main>`;
+    <button class="btn" id="join">Join</button>
+    <p class="foot">BC Dads Golf v${APP_VERSION}</p></div></main>`;
   document.getElementById('join').onclick = async (ev) => {
     const btn = ev.target, err = document.getElementById('jerr');
     err.textContent = ''; btn.disabled = true;
@@ -171,73 +368,354 @@ function joinScreen(msg) {
       const { error } = await sb.rpc('join_group', { p_code: document.getElementById('code').value.trim(), p_name: document.getElementById('jname').value });
       if (error) throw error;
       const { data } = await sb.from('members').select('*').eq('id', S.user.id).single();
-      S.me = data; if (!location.hash) go('#/use'); render();
+      S.me = data; document.getElementById('code').value = ''; document.getElementById('jname').value = '';
+      if (!location.hash) go('#/use'); render();
     } catch (e) { err.textContent = e.message; btn.disabled = false; }
   };
 }
 
-// ---------- shell
-function shell(r, inner) {
-  app.innerHTML = `<header><h1>BC Dads Golf</h1>
+// ---------- shell: header, page, bottom tabs or comment bar
+function shell(r, inner, { thread = null } = {}) {
+  document.body.className = thread ? 'composing' : (r.mode === 'create' ? 'tabs' : '');
+  const left = thread
+    ? `<button class="back" data-go="#/create/ideas" aria-label="Back to ideas">${icon('back', 26)}<span>Ideas</span></button>`
+    : `<h1>BC Dads Golf</h1>`;
+  app.innerHTML = `<header class="top">${left}
     <div class="seg"><button data-go="#/use" class="${r.mode === 'use' ? 'on' : ''}">Use</button>
     <button data-go="#/create/ideas" class="${r.mode === 'create' ? 'on' : ''}">Create</button></div></header>
     <main>${storageOk() ? '' : `<div class="card err">${esc(NO_STORAGE)}</div>`}${inner}
-    <p class="muted" style="text-align:center;font-size:12px">BC Dads Golf v${APP_VERSION}</p></main>
-    ${r.mode === 'create' ? `<nav class="tabs"><button data-go="#/create/ideas" class="${r.tab === 'ideas' ? 'on' : ''}">Ideas</button>
-    <button data-go="#/create/features" class="${r.tab === 'features' ? 'on' : ''}">Features</button></nav>` : ''}`;
+    ${thread ? '' : `<p class="foot">BC Dads Golf v${APP_VERSION}</p>`}</main>
+    ${thread ? composerHTML(thread) : r.mode === 'create' ? `<nav class="tabs">
+      <button data-go="#/create/ideas" class="${r.tab === 'ideas' ? 'on' : ''}">${icon('ideas', 22)}Ideas</button>
+      <button data-go="#/create/features" class="${r.tab === 'features' ? 'on' : ''}">${icon('star', 22)}Features</button></nav>` : ''}`;
 }
-document.addEventListener('click', e => {
-  const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go); }
-});
 
 async function render() {
   const r = route();
   if (r.mode === 'use') {
-    return shell(r, `<div class="center"><h2>Scoring is coming</h2>
+    return shell(r, `<div class="use"><div class="flag">${icon('flag', 34)}</div><h2>Scoring is coming</h2>
       <p class="muted">Nothing to use yet. Head to Create to share ideas for how our golf scoring should work.</p>
-      <button class="btn" data-go="#/create/ideas">Go to Create</button></div>`);
+      <button class="btn" data-go="#/create/ideas" style="margin-top:8px">Go to Create</button></div>`);
   }
-  shell(r, `<p class="muted">Loading...</p>`);
-  try {
-    if (r.tab === 'features') return await viewFeatures(r);
-    if (r.id) return await viewIdea(r);
-    return await viewIdeas(r);
-  } catch (e) { fail(e); }
+  if (r.tab === 'features') return renderFeatures(r);
+  if (r.id) return renderThread(r.id);
+  return renderFeed(r);
 }
 
-// ---------- ideas list
-async function viewIdeas(r) {
-  const { data, error } = await sb.from('ideas')
-    .select('id,title,body,status,summary,created_at,author:members(name),comments(count)')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  const list = data.map(i => `<div class="card click" data-go="#/create/ideas/${i.id}">
-      <div class="row spread"><h3>${esc(i.title)}</h3>${chip(i.status)}</div>
-      <div class="muted">${esc(i.author?.name)} · ${when(i.created_at)} · ${i.comments?.[0]?.count || 0} replies</div>
-      <div style="margin-top:6px">${esc(i.summary || i.body).slice(0, 160)}${(i.summary || i.body).length > 160 ? '...' : ''}</div></div>`).join('');
-  shell(r, `<div class="row spread" style="margin-bottom:12px"><h2 style="margin:0">Ideas</h2>
-      <button class="btn" id="newIdea">New idea</button></div>
-    ${list || `<div class="center muted">No ideas yet. Be the first.</div>`}`);
-  document.getElementById('newIdea').onclick = newIdeaSheet;
+// ---------- likes
+function likeAct(kind, id) {
+  if (!S.likesOn) return '';
+  const s = LK[kind].get(id) || { n: 0, mine: false };
+  return kind === 'idea'
+    ? `<button class="act ${s.mine ? 'on' : ''}" data-like="idea:${id}" aria-label="Like">${icon('thumb')}<span>${s.n || ''}</span></button>`
+    : `<button class="${s.mine ? 'on' : ''}" data-like="comment:${id}">Like</button>`;
+}
+function commentLikeBadge(id) {
+  const s = LK.comment.get(id); if (!s || !s.n) return '';
+  return `<span class="c-likes">${icon('thumb')}${s.n}</span>`;
+}
+function patchLike(kind, id) {
+  const s = LK[kind].get(id) || { n: 0, mine: false };
+  document.querySelectorAll(`[data-like="${kind}:${id}"]`).forEach(b => {
+    b.classList.toggle('on', s.mine);
+    if (kind === 'idea') b.querySelector('span').textContent = s.n || '';
+  });
+  if (kind === 'comment') {
+    const bub = document.querySelector(`.c-row[data-cid="${id}"] .bubble`);
+    if (bub) { bub.querySelector('.c-likes')?.remove(); bub.insertAdjacentHTML('beforeend', commentLikeBadge(id)); }
+  }
+}
+async function toggleLike(kind, id, onlyLike = false) {
+  if (!S.likesOn) return;
+  const m = LK[kind], before = m.get(id) || { n: 0, mine: false };
+  if (onlyLike && before.mine) return;
+  const on = !before.mine;
+  m.set(id, { n: Math.max(0, before.n + (on ? 1 : -1)), mine: on });
+  patchLike(kind, id); haptic();
+  document.querySelectorAll(`[data-like="${kind}:${id}"]`).forEach(b => { b.classList.remove('pop'); void b.offsetWidth; if (on) b.classList.add('pop'); });
+  const table = kind === 'idea' ? 'idea_likes' : 'comment_likes', col = kind === 'idea' ? 'idea_id' : 'comment_id';
+  const { error } = on
+    ? await sb.from(table).insert({ [col]: id, member_id: uid() })
+    : await sb.from(table).delete().eq(col, id).eq('member_id', uid());
+  if (error && !(on && error.code === '23505')) { m.set(id, before); patchLike(kind, id); toast("Couldn't save your like. Try again."); }
+}
+function burst(el) {
+  const b = document.createElement('span'); b.className = 'burst'; b.innerHTML = icon('thumb');
+  if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+  el.appendChild(b); setTimeout(() => b.remove(), 750);
+}
+function setLikes(kind, rows, col) {
+  const counts = new Map();
+  for (const r of rows) {
+    const s = counts.get(r[col]) || { n: 0, mine: false };
+    s.n++; if (r.member_id === uid()) s.mine = true; counts.set(r[col], s);
+  }
+  return counts;
 }
 
-// ---------- photo picking (shared by idea + reply composers)
-function pickerHtml(id) {
-  return `<div class="row"><label class="btn ghost small" style="margin:0;cursor:pointer">Add photos
-    <input type="file" id="${id}" accept="image/*" multiple hidden></label><span class="muted" id="${id}n"></span></div>
-    <div class="photos thumbs" id="${id}p"></div>`;
+// ---------- photos and polls (shared by feed and threads)
+function photosHTML(paths, zoom) {
+  if (!paths.length) return '';
+  const show = paths.slice(0, 4), n = show.length, extra = paths.length - 4;
+  return `<div class="ph n${n}">${show.map((p, i) => {
+    const u = esc(photoUrl(p));
+    const more = i === 3 && extra > 0 ? ` class="more" data-more="+${extra}"` : '';
+    return `<div${more}><img loading="lazy" src="${u}" alt="photo"${zoom ? ` data-lb="${u}"` : ''}></div>`;
+  }).join('')}</div>`;
 }
-function bindPicker(id) {
-  const files = [];
-  const input = document.getElementById(id);
-  input.onchange = () => {
-    for (const f of input.files) files.push(f);
-    input.value = '';
-    document.getElementById(id + 'n').textContent = files.length ? `${files.length} photo${files.length > 1 ? 's' : ''}` : '';
-    document.getElementById(id + 'p').innerHTML = files.map(f => `<img src="${URL.createObjectURL(f)}" alt="">`).join('');
+function pollHTML(p) {
+  const votes = p.poll_votes || [], total = votes.length;
+  const mine = votes.find(v => v.voter_id === uid())?.option_id;
+  const canDel = p.created_by === uid() || S.me.is_admin;
+  return `<div class="poll" data-stop>
+    <div class="poll-q"><span>${icon('poll', 16)}</span><span style="flex:1">${esc(p.question)}</span>${canDel ? `<button data-delpoll="${p.id}" aria-label="Delete poll" class="muted">${icon('trash', 16)}</button>` : ''}</div>
+    ${p.poll_options.map(o => {
+      const n = votes.filter(v => v.option_id === o.id).length, pct = total ? Math.round(100 * n / total) : 0;
+      return `<button class="opt ${mine === o.id ? 'mine' : ''}" data-vote="${p.id}|${o.id}"><span class="bar" style="width:${mine ? pct : 0}%"></span><span>${esc(o.label)}</span><span>${mine ? pct + '%' : ''}</span></button>`;
+    }).join('')}
+    <div class="muted sm">${total} vote${total === 1 ? '' : 's'}${mine ? ' · tap another option to change' : ' · tap to vote and see results'}</div></div>`;
+}
+async function vote(pollId, optionId) {
+  haptic();
+  const { error } = await sb.from('poll_votes').upsert({ poll_id: pollId, option_id: optionId, voter_id: uid() }, { onConflict: 'poll_id,voter_id' });
+  if (error) return toastFail(error);
+  const r = route();
+  if (r.id) { await loadThread(r.id).catch(toastFail); rerenderThread(); } else refreshFeed();
+}
+
+// ---------- feed
+async function loadFeed() {
+  const iq = await sb.from('ideas').select('*, author:members(name)').order('created_at', { ascending: false }).limit(100);
+  if (iq.error) throw iq.error;
+  const ideas = iq.data, ids = ideas.map(i => i.id);
+  let comments = [], atts = [], polls = [], likes = [];
+  if (ids.length) {
+    const [cq, aq, pq, lq] = await Promise.all([
+      sb.from('comments').select('id,idea_id,body,is_ai,kind,created_at,author:members(name)').in('idea_id', ids).order('created_at', { ascending: false }).limit(1000),
+      sb.from('attachments').select('idea_id,comment_id,path,created_at').in('idea_id', ids).is('comment_id', null).order('created_at'),
+      sb.from('polls').select('id,idea_id,question,created_by,created_at,poll_options(id,label),poll_votes(option_id,voter_id)').in('idea_id', ids).order('created_at'),
+      sb.from('idea_likes').select('idea_id,member_id').in('idea_id', ids),
+    ]);
+    for (const q of [cq, aq, pq]) if (q.error) throw q.error;
+    comments = cq.data; atts = aq.data; polls = pq.data;
+    S.likesOn = !lq.error; likes = lq.error ? [] : lq.data;
+  }
+  LK.idea = setLikes('idea', likes, 'idea_id');
+  for (const i of ideas) {
+    const cs = comments.filter(c => c.idea_id === i.id);
+    i.ccount = cs.length; i.last = cs[0] || null;
+    i.photos = atts.filter(a => a.idea_id === i.id).map(a => a.path);
+    i.polls = polls.filter(p => p.idea_id === i.id);
+    i.activity = i.last_activity_at || (cs[0] && cs[0].created_at > i.created_at ? cs[0].created_at : i.created_at);
+  }
+  S.feed = ideas;
+}
+function feedHTML() {
+  const list = [...(S.feed || [])].sort((a, b) => S.sort === 'new'
+    ? b.created_at.localeCompare(a.created_at)
+    : new Date(b.activity) - new Date(a.activity));
+  return `<button class="prompt" data-act="new-idea">${avatar(S.me.name, 38)}<span class="ptext">What should the app do?</span>${icon('image', 22)}</button>
+    <div class="sortbar"><button class="pill ${S.sort === 'active' ? 'on' : ''}" data-sort="active">Most active</button>
+      <button class="pill ${S.sort === 'new' ? 'on' : ''}" data-sort="new">Newest</button></div>
+    ${list.length ? list.map(postCard).join('') : `<div class="empty">${icon('ideas', 40)}<p>No ideas yet. Be the first to post one.</p></div>`}`;
+}
+function postCard(i) {
+  const last = i.last ? `<div class="p-last">${avatar(nameOf(i.last), 24, i.last.is_ai)}<p><b>${esc(nameOf(i.last))}</b> ${esc(i.last.body)}</p></div>` : '';
+  return `<article class="post" data-open="${i.id}">
+    <div class="p-head">${avatar(i.author?.name)}<div class="p-who"><b>${esc(i.author?.name || 'Someone')}</b>
+      <span>${ago(i.created_at)}${i.status !== 'open' ? ' · ' + chip(i.status) : ''}</span></div></div>
+    <h3 class="p-title">${esc(i.title)}</h3>
+    ${i.body ? `<p class="p-body clamp">${esc(i.body)}</p>` : ''}
+    ${photosHTML(i.photos, false)}
+    ${i.polls.map(pollHTML).join('')}
+    ${i.summary ? `<div class="teaser">${icon('sparkle', 15)}<span>${esc(i.summary)}</span></div>` : ''}
+    <div class="p-actions">${likeAct('idea', i.id)}
+      <button class="act" data-open="${i.id}" aria-label="Comments">${icon('chat')}<span>${i.ccount || ''}</span></button>
+      <span class="spacer"></span>${i.ccount ? `<span class="muted sm" style="padding-right:8px">${i.ccount} comment${i.ccount > 1 ? 's' : ''}</span>` : ''}</div>
+    ${last}</article>`;
+}
+function feedSkeleton() {
+  return Array.from({ length: 3 }, () => `<div class="post" style="cursor:default"><div class="p-head"><span class="sk" style="width:40px;height:40px;border-radius:50%"></span>
+    <div style="flex:1"><div class="sk" style="width:40%;height:12px;margin-bottom:6px"></div><div class="sk" style="width:20%;height:10px"></div></div></div>
+    <div class="sk" style="width:70%;height:16px;margin:10px 0"></div><div class="sk" style="width:95%;height:12px;margin-bottom:6px"></div><div class="sk" style="width:80%;height:12px;margin-bottom:12px"></div></div>`).join('');
+}
+async function renderFeed(r) {
+  let f = $('#feed');
+  if (!f) {
+    shell(r, `<div class="ptr" id="ptr">${icon('down', 22)}</div><div id="feed">${S.feed ? feedHTML() : feedSkeleton()}</div>`);
+    window.scrollTo(0, S.feed ? S.feedScroll : 0);
+  }
+  try { await loadFeed(); } catch (e) { return toastFail(e); }
+  f = $('#feed');
+  const now = route();
+  if (f && now.mode === 'create' && now.tab === 'ideas' && !now.id) f.innerHTML = feedHTML();
+}
+async function refreshFeed() {
+  try { await loadFeed(); const f = $('#feed'); if (f) f.innerHTML = feedHTML(); } catch (e) { toastFail(e); }
+}
+
+// ---------- thread (one idea and its discussion)
+async function loadThread(id) {
+  const [iq, aq, pq, cq, lq] = await Promise.all([
+    sb.from('ideas').select('*, author:members(name)').eq('id', id).maybeSingle(),
+    sb.from('attachments').select('*').eq('idea_id', id).order('created_at'),
+    sb.from('polls').select('*, poll_options(id,label), poll_votes(option_id,voter_id)').eq('idea_id', id).order('created_at'),
+    sb.from('comments').select('*, author:members(name)').eq('idea_id', id).order('created_at'),
+    sb.from('idea_likes').select('idea_id,member_id').eq('idea_id', id),
+  ]);
+  for (const q of [iq, aq, pq, cq]) if (q.error) throw q.error;
+  S.likesOn = !lq.error;
+  if (!lq.error) LK.idea.set(id, setLikes('idea', lq.data, 'idea_id').get(id) || { n: 0, mine: false });
+  const cids = cq.data.map(c => c.id);
+  if (S.likesOn && cids.length) {
+    const cl = await sb.from('comment_likes').select('comment_id,member_id').in('comment_id', cids);
+    if (!cl.error) { const m = setLikes('comment', cl.data, 'comment_id'); cids.forEach(c => LK.comment.set(c, m.get(c) || { n: 0, mine: false })); }
+  }
+  S.threads[id] = { idea: iq.data, atts: aq.data, polls: pq.data, comments: cq.data };
+}
+function threadHTML(id) {
+  const t = S.threads[id];
+  if (!t) return threadSkeleton();
+  const { idea, atts, polls, comments } = t;
+  if (!idea) return `<div class="empty"><p>That idea was not found. It may have been deleted.</p><button class="btn" data-go="#/create/ideas">Back to ideas</button></div>`;
+  const pics = cid => atts.filter(x => (x.comment_id || null) === cid).map(x => x.path);
+  const canEdit = o => o === uid() || S.me.is_admin;
+  const questions = Array.isArray(idea.open_questions) ? idea.open_questions : [];
+  const pending = aiPending.has(id);
+
+  const post = `<article class="post full">
+    <div class="p-head">${avatar(idea.author?.name)}<div class="p-who"><b>${esc(idea.author?.name || 'Someone')}</b><span>${ago(idea.created_at)} · ${chip(idea.status)}</span></div>
+      ${canEdit(idea.author_id) ? `<button data-act="del-idea" class="muted" aria-label="Delete idea">${icon('trash', 18)}</button>` : ''}</div>
+    <div data-dbl="idea:${id}"><h3 class="p-title" style="font-size:20px">${esc(idea.title)}</h3>
+    ${idea.body ? `<p class="p-body">${esc(idea.body)}</p>` : ''}</div>
+    ${photosHTML(pics(null), true)}
+    ${polls.map(pollHTML).join('')}
+    ${idea.status === 'built' ? `<p class="muted sm">Built${idea.built_version ? ' in version ' + esc(idea.built_version) : ''}. See it on the Features tab.</p>` : ''}
+    <div class="p-actions">${likeAct('idea', id)}<button class="act" data-act="focus-composer">${icon('chat')}<span>${comments.length || ''}</span></button>
+      <span class="spacer"></span><button class="act" data-act="new-poll">${icon('poll')}<span>Poll</span></button></div></article>`;
+
+  const ai = `<div class="ai-card"><div class="ai-head">${avatar('', 26, true)}<b>Assistant summary</b><span class="spacer"></span>
+      ${idea.ai_updated_at ? `<span class="muted sm">${ago(idea.ai_updated_at)}</span>` : ''}</div>
+    ${idea.summary ? `<div style="white-space:pre-wrap">${esc(idea.summary)}</div>` : `<div class="muted">The assistant hasn't summarized this idea yet.</div>`}
+    ${questions.length ? `<div class="label">Still to answer</div><ul>${questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}
+    <div class="ai-foot">${pending ? `<span class="reading"><span class="dots"><i></i><i></i><i></i></span>Reading the discussion</span>`
+      : `<button class="linkbtn" data-act="ai-refresh">${icon('refresh', 15)}Refresh summary</button>`}
+      ${aiNote[id] ? `<span class="muted">${esc(aiNote[id])}</span>` : ''}</div></div>`;
+  const spec = idea.spec ? `<div class="card spec"><div class="label" style="color:var(--gold);margin:0 0 4px">What we would implement</div><div style="white-space:pre-wrap">${esc(idea.spec)}</div></div>` : '';
+  const admin = S.me.is_admin ? `<div class="card admin"><b class="sm">Status</b><select id="status" aria-label="Status">
+    ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>` : '';
+
+  const row = (c, reply) => {
+    const mine = c.author_id === uid() || S.me.is_admin;
+    const isQ = c.is_ai && c.kind === 'question';
+    return `<div class="c-row ${reply ? 'reply' : ''}" data-cid="${c.id}" data-mine="${mine ? '1' : ''}">
+      <span class="sw r">${icon('reply', 22)}</span>${mine ? `<span class="sw l">${icon('trash', 22)}</span>` : ''}
+      <div class="c-main">${avatar(nameOf(c), reply ? 28 : 34, c.is_ai)}<div class="c-col">
+        <div class="bubble ${c.is_ai ? 'ai' : ''}" data-dbl="comment:${c.id}"><b>${esc(nameOf(c))}</b>${isQ ? '<span class="tag">QUESTION</span>' : ''}
+          <div class="c-text">${esc(c.body)}</div>${photosHTML(pics(c.id), true)}${commentLikeBadge(c.id)}</div>
+        <div class="c-meta"><span>${ago(c.created_at)}</span>${likeAct('comment', c.id)}<button data-reply="${c.id}">${isQ ? 'Answer' : 'Reply'}</button></div>
+      </div></div></div>`;
   };
-  return files;
+  const tops = comments.filter(c => !c.parent_id);
+  const rootOf = c => { let p = c; const seen = new Set(); while (p && p.parent_id && !seen.has(p.id)) { seen.add(p.id); p = comments.find(x => x.id === p.parent_id) || null; } return p ? p.id : c.id; };
+  const threadList = tops.map(top => {
+    const kids = comments.filter(c => c.parent_id && rootOf(c) === top.id);
+    const hidden = S.open.has(top.id) ? 0 : Math.max(0, kids.length - 2);
+    return row(top, false)
+      + (hidden ? `<button class="morebtn" data-more="${top.id}">View ${hidden} earlier repl${hidden === 1 ? 'y' : 'ies'}</button>` : '')
+      + kids.slice(hidden).map(k => row(k, true)).join('');
+  }).join('');
+
+  return `${post}${ai}${spec}${admin}
+    <div class="c-title"><b>${comments.length ? `${comments.length} comment${comments.length > 1 ? 's' : ''}` : 'Comments'}</b></div>
+    <div class="comments">${threadList || `<div class="empty" style="padding:24px">No comments yet. Start the conversation below.</div>`}</div>
+    ${comments.length ? `<p class="hint">Swipe right on a comment to reply · double-tap to like</p>` : ''}`;
 }
+function threadSkeleton() {
+  return `<div class="post full" style="cursor:default"><div class="p-head"><span class="sk" style="width:40px;height:40px;border-radius:50%"></span><div style="flex:1"><div class="sk" style="width:40%;height:12px"></div></div></div>
+    <div class="sk" style="width:60%;height:20px;margin:8px 0"></div><div class="sk" style="width:90%;height:12px;margin-bottom:8px"></div></div>
+    <div class="ai-card"><div class="sk" style="width:50%;height:12px;margin-bottom:8px"></div><div class="sk" style="width:85%;height:12px"></div></div>`;
+}
+function composerHTML(id) {
+  return `<div class="composer" id="composer" data-id="${id}"><div class="inner">
+    <div class="replying hidden" id="replying"><span>Replying to <b id="replyName"></b></span><button data-act="cancel-reply" aria-label="Cancel reply">${icon('x', 18)}</button></div>
+    <div class="thumbs" id="cthumbs"></div>
+    <div class="c-bar"><button class="icb" data-act="pick-photo" aria-label="Add photos">${icon('image', 22)}</button>
+      <textarea id="ctext" rows="1" maxlength="5000" placeholder="Add a comment..."></textarea>
+      <button class="icb send" id="send" data-act="send" aria-label="Send" disabled>${icon('send', 18)}</button></div>
+    <input type="file" id="cfile" accept="image/*" multiple hidden></div></div>`;
+}
+function rerenderThread() {
+  const id = route().id, tv = $('#tv');
+  if (id && tv && tv.dataset.id === id) tv.innerHTML = threadHTML(id);
+}
+async function renderThread(id) {
+  let tv = $('#tv');
+  if (!tv || tv.dataset.id !== id) {
+    S.replyTo = null; S.files = [];
+    shell(route(), `<div id="tv" data-id="${id}" class="slide-in">${threadHTML(id)}</div>`, { thread: id });
+    window.scrollTo(0, 0);
+    bindComposer();
+  }
+  try { await loadThread(id); } catch (e) { return toastFail(e); }
+  rerenderThread();
+}
+
+// ---------- the comment bar
+function bindComposer() {
+  const ta = $('#ctext'), send = $('#send'), file = $('#cfile');
+  const sync = () => {
+    ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+    send.disabled = !ta.value.trim() && !S.files.length;
+  };
+  ta.addEventListener('input', sync);
+  file.addEventListener('change', () => {
+    for (const f of file.files) if (S.files.length < 6) S.files.push(f);
+    file.value = ''; drawThumbs(); sync();
+  });
+  $('#composer')._sync = sync;
+}
+function drawThumbs() {
+  const el = $('#cthumbs'); if (!el) return;
+  el.innerHTML = S.files.map((f, i) => `<div><img src="${URL.createObjectURL(f)}" alt=""><button data-act="rm-photo" data-i="${i}" aria-label="Remove photo">${icon('x', 12)}</button></div>`).join('');
+}
+function startReply(cid) {
+  const id = route().id, t = S.threads[id]; if (!t) return;
+  const c = t.comments.find(x => x.id === cid); if (!c) return;
+  let root = c; while (root.parent_id) { const p = t.comments.find(x => x.id === root.parent_id); if (!p || p === root) break; root = p; }
+  S.replyTo = { root: root.id, name: nameOf(c) };
+  $('#replyName').textContent = nameOf(c);
+  $('#replying').classList.remove('hidden');
+  const ta = $('#ctext');
+  if (c.parent_id && !c.is_ai && !ta.value) ta.value = '@' + nameOf(c) + ' ';
+  ta.focus(); $('#composer')._sync();
+}
+function cancelReply() { S.replyTo = null; $('#replying')?.classList.add('hidden'); }
+async function sendComment() {
+  const id = route().id, ta = $('#ctext'), btn = $('#send');
+  const text = ta.value.trim(); if (!text && !S.files.length) return;
+  btn.disabled = true; btn.dataset.busy = '1';
+  try {
+    const parent = S.replyTo?.root || null;
+    const { data, error } = await sb.from('comments').insert({ idea_id: id, parent_id: parent, author_id: uid(), body: text || 'Shared a photo' }).select('id').single();
+    if (error) throw error;
+    await uploadPhotos(S.files, id, data.id);
+    ta.value = ''; S.files = []; drawThumbs(); cancelReply(); ta.blur(); $('#composer')._sync();
+    if (parent) S.open.add(parent);
+    await loadThread(id); rerenderThread();
+    document.querySelector(`.c-row[data-cid="${data.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    askAI(id);
+  } catch (e) { toastFail(e); }
+  finally { delete btn.dataset.busy; $('#composer')?._sync(); }
+}
+async function delComment(cid) {
+  if (!confirm('Delete this comment?')) return;
+  const { error } = await sb.from('comments').delete().eq('id', cid);
+  if (error) return toastFail(error);
+  const id = route().id; await loadThread(id).catch(toastFail); rerenderThread();
+}
+
+// ---------- photos
 async function shrink(file) {
   const bmp = await createImageBitmap(file);
   const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
@@ -249,204 +727,239 @@ async function shrink(file) {
 async function uploadPhotos(files, ideaId, commentId) {
   for (const f of files) {
     const blob = await shrink(f);
-    const path = `${S.user.id}/${crypto.randomUUID()}.jpg`;
+    const path = `${uid()}/${crypto.randomUUID()}.jpg`;
     const up = await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' });
     if (up.error) throw up.error;
-    const { error } = await sb.from('attachments').insert({ idea_id: ideaId, comment_id: commentId || null, uploader_id: S.user.id, path });
+    const { error } = await sb.from('attachments').insert({ idea_id: ideaId, comment_id: commentId || null, uploader_id: uid(), path });
     if (error) throw error;
   }
 }
-
-// ---------- new idea
-function newIdeaSheet() {
-  const el = document.createElement('div'); el.className = 'sheet';
-  el.innerHTML = `<div class="inner"><div class="row spread"><h2 style="margin:0">New idea</h2><button class="link" id="x">Cancel</button></div>
-    <label>Title</label><input type="text" id="t" maxlength="140" placeholder="e.g. Stableford scoring with handicaps">
-    <label>Details</label><textarea id="b" maxlength="5000" placeholder="What should it do, and why?"></textarea>
-    ${pickerHtml('ph')}<p class="err" id="e"></p>
-    <button class="btn" id="post" style="width:100%;margin-top:8px">Post idea</button></div>`;
-  document.body.appendChild(el);
-  const files = bindPicker('ph');
-  el.querySelector('#x').onclick = () => el.remove();
-  el.querySelector('#post').onclick = async ev => {
-    const btn = ev.target, title = el.querySelector('#t').value.trim();
-    if (title.length < 3) return el.querySelector('#e').textContent = 'Give it a title (at least 3 characters).';
-    btn.disabled = true; btn.textContent = 'Posting...';
-    try {
-      const { data, error } = await sb.from('ideas').insert({ author_id: S.user.id, title, body: el.querySelector('#b').value.trim() }).select('id').single();
-      if (error) throw error;
-      await uploadPhotos(files, data.id, null);
-      askAI(data.id);
-      el.remove(); go('#/create/ideas/' + data.id);
-    } catch (e) { el.querySelector('#e').textContent = e.message; btn.disabled = false; btn.textContent = 'Post idea'; }
-  };
+function lightbox(src) {
+  const d = document.createElement('div'); d.className = 'lb';
+  d.innerHTML = `<img src="${esc(src)}" alt="photo">`;
+  document.body.appendChild(d); requestAnimationFrame(() => d.classList.add('in'));
+  const img = d.firstElementChild;
+  const close = () => { d.classList.remove('in'); setTimeout(() => d.remove(), 200); };
+  let y0 = null, dy = 0;
+  d.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; dy = 0; img.style.transition = 'none'; }, { passive: true });
+  d.addEventListener('touchmove', e => { if (y0 == null) return; dy = e.touches[0].clientY - y0; img.style.transform = `translateY(${dy}px)`; d.style.background = `rgba(0,0,0,${Math.max(.3, 1 - Math.abs(dy) / 400)})`; }, { passive: true });
+  d.addEventListener('touchend', () => { img.style.transition = ''; if (Math.abs(dy) > 90) close(); else { img.style.transform = ''; d.style.background = ''; } y0 = null; });
+  d.addEventListener('click', () => { if (Math.abs(dy) < 10) close(); });
 }
 
-// ---------- idea detail
-async function viewIdea(r) {
-  const id = r.id;
-  const [ideaQ, attQ, pollQ, comQ] = await Promise.all([
-    sb.from('ideas').select('*, author:members(name)').eq('id', id).maybeSingle(),
-    sb.from('attachments').select('*').eq('idea_id', id).order('created_at'),
-    sb.from('polls').select('*, poll_options(id,label), poll_votes(option_id,voter_id)').eq('idea_id', id).order('created_at'),
-    sb.from('comments').select('*, author:members(name)').eq('idea_id', id).order('created_at'),
-  ]);
-  for (const q of [ideaQ, attQ, pollQ, comQ]) if (q.error) throw q.error;
-  const idea = ideaQ.data;
-  if (!idea) return shell(r, `<div class="center"><p>That idea was not found.</p><button class="btn" data-go="#/create/ideas">Back to ideas</button></div>`);
-
-  const atts = attQ.data, polls = pollQ.data, comments = comQ.data;
-  const photosFor = cid => {
-    const a = atts.filter(x => (x.comment_id || null) === cid);
-    return a.length ? `<div class="photos">${a.map(x => `<a href="${esc(photoUrl(x.path))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(photoUrl(x.path))}" alt="photo"></a>`).join('')}</div>` : '';
-  };
-  const canEdit = o => o === S.user.id || S.me.is_admin;
-
-  const questions = Array.isArray(idea.open_questions) ? idea.open_questions : [];
-  const pending = aiPending.has(id);
-  const aiBox = `<div class="ai"><div class="row spread"><div class="tag">AI summary</div>${idea.ai_updated_at ? `<span class="muted" style="font-size:12px">Updated ${when(idea.ai_updated_at)}</span>` : ''}</div>
-      ${idea.summary ? `<div class="body" style="margin-top:4px">${esc(idea.summary)}</div>` : `<div class="muted" style="margin-top:4px">The assistant has not summarized this idea yet.</div>`}
-      ${questions.length ? `<div class="tag" style="margin-top:10px">Still to answer</div><ul>${questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}
-      <div class="row" style="margin-top:10px">${pending ? '<span class="muted">The assistant is reading the discussion...</span>' : '<button class="link" id="aiRefresh">Refresh summary</button>'}
-        ${aiNote[id] ? `<span class="muted">${esc(aiNote[id])}</span>` : ''}</div></div>`;
-  const specBox = idea.spec ? `<div class="ai spec"><div class="tag" style="color:var(--accent)">What we would implement</div><div class="body" style="margin-top:4px">${esc(idea.spec)}</div></div>` : '';
-  const builtNote = idea.status === 'built' ? `<p class="muted">Built${idea.built_version ? ' in version ' + esc(idea.built_version) : ''}. See it on the Features tab.</p>` : '';
-
-  const pollHtml = polls.map(p => {
-    const votes = p.poll_votes || [], total = votes.length;
-    const mine = votes.find(v => v.voter_id === S.user.id)?.option_id;
-    return `<div class="card"><div class="row spread"><b>${esc(p.question)}</b>${canEdit(p.created_by) ? `<button class="link danger" data-delpoll="${p.id}">Delete</button>` : ''}</div>
-      ${p.poll_options.map(o => { const n = votes.filter(v => v.option_id === o.id).length; const pct = total ? Math.round(100 * n / total) : 0;
-        return `<div class="opt ${mine === o.id ? 'mine' : ''}" data-vote="${p.id}|${o.id}"><div class="bar" style="width:${pct}%"></div><span>${esc(o.label)}</span><span>${n}</span></div>`; }).join('')}
-      <div class="muted">${total} vote${total === 1 ? '' : 's'}${mine ? ' · tap another option to change yours' : ' · tap an option to vote'}</div></div>`;
-  }).join('');
-
-  const renderComment = (c, reply) => `<div class="comment ${reply ? 'reply' : ''} ${c.is_ai && c.kind === 'question' ? 'aiq' : ''}">
-      <div class="row spread"><b>${esc(nameOf(c))}${c.is_ai ? ' <span class="chip">AI</span>' : ''}</b><span class="muted">${when(c.created_at)}</span></div>
-      <div class="body">${esc(c.body)}</div>${photosFor(c.id)}
-      <div class="row">${!reply ? `<button class="link" data-reply="${c.id}">${c.kind === 'question' ? 'Answer' : 'Reply'}</button>` : ''}
-      ${canEdit(c.author_id) && !c.is_ai || S.me.is_admin ? `<button class="link danger" data-delc="${c.id}">Delete</button>` : ''}</div></div>`;
-  const tops = comments.filter(c => !c.parent_id);
-  const thread = tops.map(c => renderComment(c, false) + comments.filter(x => x.parent_id === c.id).map(x => renderComment(x, true)).join('')).join('');
-
-  const adminBox = S.me.is_admin ? `<div class="card"><label style="margin-top:0">Status (admin)</label>
-      <select id="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>` : '';
-
-  shell(r, `<button class="link" data-go="#/create/ideas">&larr; All ideas</button>
-    <div class="row spread" style="margin:8px 0"><h2 style="margin:0">${esc(idea.title)}</h2>${chip(idea.status)}</div>
-    <div class="muted">${esc(idea.author?.name)} · ${when(idea.created_at)}
-      ${canEdit(idea.author_id) ? ` · <button class="link danger" id="delIdea">Delete</button>` : ''}</div>
-    ${builtNote}${aiBox}${specBox}
-    <div class="card"><div class="body">${esc(idea.body) || '<span class="muted">No details added.</span>'}</div>${photosFor(null)}</div>
-    ${adminBox}
-    ${pollHtml}
-    <h3>Discussion</h3>
-    <div class="card" id="thread">${thread || '<div class="muted">No replies yet.</div>'}</div>
-    <div class="card"><div class="row spread"><b id="replyLabel">Add to the discussion</b><button class="link hidden" id="cancelReply">Cancel reply</button></div>
-      <textarea id="ctext" maxlength="5000" placeholder="Share your thoughts..."></textarea>
-      ${pickerHtml('cph')}<p class="err" id="cerr"></p>
-      <div class="row" style="margin-top:8px"><button class="btn" id="send">Post</button><button class="btn ghost" id="addPoll">Add a poll</button></div></div>
-    <div class="card hidden" id="pollForm"><b>New poll</b>
-      <label>Question</label><input type="text" id="pq" maxlength="200">
-      <label>Options (one per line, 2 to 6)</label><textarea id="po" placeholder="Option A&#10;Option B"></textarea>
-      <p class="err" id="perr"></p><div class="row"><button class="btn" id="makePoll">Create poll</button><button class="link" id="cancelPoll">Cancel</button></div></div>`);
-
-  // ----- wire up
-  let parentId = null;
-  const files = bindPicker('cph');
-  const refresh = () => render();
-  const guard = async fn => { try { await fn(); } catch (e) { fail(e); } };
-
-  app.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => {
-    parentId = b.dataset.reply;
-    const who = comments.find(c => c.id === parentId);
-    document.getElementById('replyLabel').textContent = `Replying to ${nameOf(who)}`;
-    document.getElementById('cancelReply').classList.remove('hidden');
-    document.getElementById('ctext').focus();
-  });
-  document.getElementById('cancelReply').onclick = () => { parentId = null; document.getElementById('replyLabel').textContent = 'Add to the discussion'; document.getElementById('cancelReply').classList.add('hidden'); };
-
-  document.getElementById('send').onclick = ev => guard(async () => {
-    const text = document.getElementById('ctext').value.trim();
-    if (!text) return document.getElementById('cerr').textContent = 'Write something first.';
-    ev.target.disabled = true;
+// ---------- bottom sheets (new idea, new poll). Swipe down on the top bar to close.
+function sheet(html) {
+  const bg = document.createElement('div'); bg.className = 'sheet-bg';
+  bg.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`;
+  document.body.appendChild(bg); requestAnimationFrame(() => bg.classList.add('in'));
+  const sh = bg.firstElementChild;
+  const close = () => { bg.classList.remove('in'); setTimeout(() => bg.remove(), 260); };
+  bg.addEventListener('click', e => { if (e.target === bg) close(); });
+  let y0 = null, dy = 0;
+  sh.addEventListener('touchstart', e => { if (!e.target.closest('.grab,.sh-head')) return; y0 = e.touches[0].clientY; dy = 0; sh.style.transition = 'none'; }, { passive: true });
+  sh.addEventListener('touchmove', e => { if (y0 == null) return; dy = Math.max(0, e.touches[0].clientY - y0); sh.style.transform = `translateY(${dy}px)`; }, { passive: true });
+  sh.addEventListener('touchend', () => { if (y0 == null) return; sh.style.transition = ''; if (dy > 100) close(); else sh.style.transform = ''; y0 = null; });
+  return { el: sh, close };
+}
+function newIdeaSheet() {
+  const files = [];
+  const { el, close } = sheet(`<div class="sh-head"><button class="cancel" data-x>Cancel</button><h2>New idea</h2><button class="btn" id="post" disabled>Post</button></div>
+    <div class="row" style="margin:4px 0">${avatar(S.me.name, 36)}<b>${esc(S.me.name)}</b></div>
+    <input class="field title" id="t" maxlength="140" placeholder="Give your idea a title" autocomplete="off">
+    <textarea class="field" id="b" maxlength="5000" placeholder="What should it do, and why?"></textarea>
+    <div class="thumbs" id="nthumbs"></div>
+    <div class="row" style="border-top:1px solid var(--line);padding-top:8px"><label class="icb" style="cursor:pointer" aria-label="Add photos">${icon('image', 22)}<input type="file" id="nf" accept="image/*" multiple hidden></label>
+      <span class="muted sm">Add photos</span></div><p class="err" id="e"></p>`);
+  const t = $('#t', el), post = $('#post', el), nf = $('#nf', el);
+  const sync = () => { post.disabled = t.value.trim().length < 3; };
+  t.addEventListener('input', sync); setTimeout(() => t.focus(), 260);
+  $('[data-x]', el).onclick = close;
+  nf.onchange = () => { for (const f of nf.files) if (files.length < 6) files.push(f); nf.value = ''; $('#nthumbs', el).innerHTML = files.map(f => `<div><img src="${URL.createObjectURL(f)}" alt=""></div>`).join(''); };
+  post.onclick = async () => {
+    post.disabled = true; post.dataset.busy = '1'; post.textContent = 'Posting...';
     try {
-      const { data, error } = await sb.from('comments').insert({ idea_id: id, parent_id: parentId, author_id: S.user.id, body: text }).select('id').single();
+      const { data, error } = await sb.from('ideas').insert({ author_id: uid(), title: t.value.trim(), body: $('#b', el).value.trim() }).select('id').single();
       if (error) throw error;
-      await uploadPhotos(files, id, data.id);
-      askAI(id);
-    } catch (e) { ev.target.disabled = false; throw e; }
-  });
-  const rb = document.getElementById('aiRefresh');
-  if (rb) rb.onclick = () => askAI(id, { manual: true, force: true });
-
-  app.querySelectorAll('[data-delc]').forEach(b => b.onclick = () => guard(async () => {
-    if (!confirm('Delete this comment?')) return;
-    const { error } = await sb.from('comments').delete().eq('id', b.dataset.delc); if (error) throw error; refresh();
-  }));
-  app.querySelectorAll('[data-delpoll]').forEach(b => b.onclick = () => guard(async () => {
-    if (!confirm('Delete this poll and its votes?')) return;
-    const { error } = await sb.from('polls').delete().eq('id', b.dataset.delpoll); if (error) throw error; refresh();
-  }));
-  const di = document.getElementById('delIdea');
-  if (di) di.onclick = () => guard(async () => {
-    if (!confirm('Delete this idea and everything in it?')) return;
-    const { error } = await sb.from('ideas').delete().eq('id', id); if (error) throw error; go('#/create/ideas');
-  });
-
-  app.querySelectorAll('[data-vote]').forEach(el => el.onclick = () => guard(async () => {
-    const [poll_id, option_id] = el.dataset.vote.split('|');
-    const { error } = await sb.from('poll_votes').upsert({ poll_id, option_id, voter_id: S.user.id }, { onConflict: 'poll_id,voter_id' });
-    if (error) throw error; refresh();
-  }));
-
-  document.getElementById('addPoll').onclick = () => document.getElementById('pollForm').classList.remove('hidden');
-  document.getElementById('cancelPoll').onclick = () => document.getElementById('pollForm').classList.add('hidden');
-  document.getElementById('makePoll').onclick = ev => guard(async () => {
-    const q = document.getElementById('pq').value.trim();
-    const opts = [...new Set(document.getElementById('po').value.split('\n').map(s => s.trim()).filter(Boolean))].slice(0, 6);
-    if (q.length < 3 || opts.length < 2) return document.getElementById('perr').textContent = 'Add a question and at least two different options.';
-    ev.target.disabled = true;
+      await uploadPhotos(files, data.id, null);
+      askAI(data.id); close(); go('#/create/ideas/' + data.id);
+    } catch (e) { $('#e', el).textContent = e.message; post.disabled = false; post.textContent = 'Post'; }
+    finally { delete post.dataset.busy; }
+  };
+}
+function pollSheet(id) {
+  const { el, close } = sheet(`<div class="sh-head"><button class="cancel" data-x>Cancel</button><h2>New poll</h2><button class="btn" id="mk">Create</button></div>
+    <input class="field title" id="pq" maxlength="200" placeholder="Ask a question" autocomplete="off" style="font-size:18px">
+    <div id="opts"><input class="opt-in" maxlength="100" placeholder="Option 1"><input class="opt-in" maxlength="100" placeholder="Option 2"></div>
+    <button class="btn ghost" id="addopt" style="margin-top:6px">${'+ Add option'}</button><p class="err" id="pe"></p>`);
+  $('[data-x]', el).onclick = close; setTimeout(() => $('#pq', el).focus(), 260);
+  $('#addopt', el).onclick = () => {
+    const n = el.querySelectorAll('.opt-in').length; if (n >= 6) return;
+    $('#opts', el).insertAdjacentHTML('beforeend', `<input class="opt-in" maxlength="100" placeholder="Option ${n + 1}">`);
+    el.querySelectorAll('.opt-in')[n].focus();
+  };
+  $('#mk', el).onclick = async ev => {
+    const q = $('#pq', el).value.trim();
+    const opts = [...new Set([...el.querySelectorAll('.opt-in')].map(i => i.value.trim()).filter(Boolean))].slice(0, 6);
+    if (q.length < 3 || opts.length < 2) return $('#pe', el).textContent = 'Add a question and at least two different options.';
+    const b = ev.target; b.disabled = true; b.dataset.busy = '1';
     try {
-      const { data, error } = await sb.from('polls').insert({ idea_id: id, created_by: S.user.id, question: q }).select('id').single();
+      const { data, error } = await sb.from('polls').insert({ idea_id: id, created_by: uid(), question: q }).select('id').single();
       if (error) throw error;
       const { error: e2 } = await sb.from('poll_options').insert(opts.map(label => ({ poll_id: data.id, label })));
       if (e2) throw e2;
+      close(); await loadThread(id); rerenderThread();
       askAI(id, { force: true }); // a new poll is new content even though it is not a comment
-    } catch (e) { ev.target.disabled = false; throw e; }
-  });
-
-  const st = document.getElementById('status');
-  if (st) st.onchange = () => guard(async () => {
-    const status = st.value, patch = { status };
-    if (status === 'built') {
-      const v = prompt('Which app version is this built in? (for example 0.2)', idea.built_version || '');
-      if (v === null) return refresh();
-      patch.built_version = v.trim() || null; patch.built_at = new Date().toISOString();
-    }
-    const { error } = await sb.from('ideas').update(patch).eq('id', id); if (error) throw error;
-    if (status === 'built') {
-      const ex = await sb.from('features').select('id').eq('idea_id', id).maybeSingle();
-      if (!ex.data) { const { error: e3 } = await sb.from('features').insert({ idea_id: id, name: idea.title, description: idea.spec || idea.summary || '', version: patch.built_version }); if (e3) throw e3; }
-    }
-    refresh();
-  });
+    } catch (e) { $('#pe', el).textContent = e.message; b.disabled = false; }
+    finally { delete b.dataset.busy; }
+  };
 }
 
 // ---------- features
-async function viewFeatures(r) {
-  const [ov, fs] = await Promise.all([
-    sb.from('overview').select('body,updated_at').eq('id', 1).maybeSingle(),
-    sb.from('features').select('*').order('created_at', { ascending: false }),
-  ]);
-  if (ov.error) throw ov.error; if (fs.error) throw fs.error;
-  const body = ov.data?.body;
-  shell(r, `<h2 style="margin-top:0">What the app can do</h2>
-    <div class="ai"><div class="tag">AI overview</div><div class="body" style="margin-top:4px">${body ? esc(body) : '<span class="muted">Nothing is built yet. When an idea is implemented it shows up here.</span>'}</div></div>
-    ${fs.data.map(f => `<div class="card"><div class="row spread"><h3>${esc(f.name)}</h3>${f.version ? `<span class="chip built">v${esc(f.version)}</span>` : ''}</div>
-      <div class="body">${esc(f.description)}</div>
-      ${f.idea_id ? `<p style="margin-bottom:0"><button class="link" data-go="#/create/ideas/${f.idea_id}">See how this was decided &rarr;</button></p>` : ''}</div>`).join('')}`);
+async function renderFeatures(r) {
+  shell(r, `<div id="fv">${feedSkeleton()}</div>`);
+  try {
+    const [ov, fs] = await Promise.all([
+      sb.from('overview').select('body,updated_at').eq('id', 1).maybeSingle(),
+      sb.from('features').select('*').order('created_at', { ascending: false }),
+    ]);
+    if (ov.error) throw ov.error; if (fs.error) throw fs.error;
+    const body = ov.data?.body;
+    const fv = $('#fv'); if (!fv) return;
+    fv.innerHTML = `<h2 style="margin:6px 4px 10px">What the app can do</h2>
+      <div class="ai-card"><div class="ai-head">${avatar('', 26, true)}<b>Overview</b></div>
+        ${body ? `<div style="white-space:pre-wrap">${esc(body)}</div>` : `<div class="muted">Nothing is built yet. When an idea is built it shows up here, with a link to the conversation that shaped it.</div>`}</div>
+      ${fs.data.map(f => `<div class="f-card"><div class="p-head" style="margin:0 0 4px"><h3 style="flex:1">${esc(f.name)}</h3>${f.version ? `<span class="chip built">v${esc(f.version)}</span>` : ''}</div>
+        <div style="white-space:pre-wrap;color:var(--ink2)">${esc(f.description)}</div>
+        ${f.idea_id ? `<button class="f-link" data-go="#/create/ideas/${f.idea_id}">See how this was decided ${icon('right', 16)}</button>` : ''}</div>`).join('')}`;
+  } catch (e) { toastFail(e); }
 }
+
+// ---------- one tap handler for the whole app
+const ACT = {
+  'new-idea': () => newIdeaSheet(),
+  'new-poll': () => pollSheet(route().id),
+  'send': () => sendComment(),
+  'pick-photo': () => $('#cfile')?.click(),
+  'rm-photo': a => { S.files.splice(+a.dataset.i, 1); drawThumbs(); $('#composer')?._sync(); },
+  'cancel-reply': () => cancelReply(),
+  'focus-composer': () => $('#ctext')?.focus(),
+  'ai-refresh': () => askAI(route().id, { manual: true, force: true }),
+  'del-idea': async () => {
+    if (!confirm('Delete this idea and everything in it?')) return;
+    const { error } = await sb.from('ideas').delete().eq('id', route().id);
+    if (error) return toastFail(error);
+    S.feed = null; go('#/create/ideas');
+  },
+};
+document.addEventListener('click', e => {
+  if (G_swipedEl && Date.now() - G_swipedAt < 350 && G_swipedEl.contains(e.target)) return; // that was the end of a swipe, not a tap
+  const a = e.target.closest('[data-go],[data-act],[data-like],[data-vote],[data-reply],[data-more],[data-delpoll],[data-sort],[data-lb],[data-stop],[data-open]');
+  if (!a) return;
+  const d = a.dataset;
+  if (d.go) return go(d.go);
+  if (d.like) { const [k, id] = d.like.split(':'); return toggleLike(k, id); }
+  if (d.vote) { const [p, o] = d.vote.split('|'); return vote(p, o); }
+  if (d.reply) return startReply(d.reply);
+  if (d.more) { S.open.add(d.more); return rerenderThread(); }
+  if (d.delpoll) {
+    return (async () => {
+      if (!confirm('Delete this poll and its votes?')) return;
+      const { error } = await sb.from('polls').delete().eq('id', d.delpoll);
+      if (error) return toastFail(error);
+      const r = route(); if (r.id) { await loadThread(r.id).catch(toastFail); rerenderThread(); } else refreshFeed();
+    })();
+  }
+  if (d.sort) { S.sort = d.sort; const f = $('#feed'); if (f) f.innerHTML = feedHTML(); return; }
+  if (d.lb) return lightbox(d.lb);
+  if (d.act) return ACT[d.act] && ACT[d.act](a, e);
+  if ('stop' in d) return; // taps inside a poll card do not open the idea
+  if (d.open) return go('#/create/ideas/' + d.open);
+});
+document.addEventListener('change', async e => {
+  if (e.target.id !== 'status') return;
+  const id = route().id, t = S.threads[id], status = e.target.value, patch = { status };
+  if (status === 'built') {
+    const v = prompt('Which app version is this built in? (for example 0.2)', t?.idea?.built_version || '');
+    if (v === null) return rerenderThread();
+    patch.built_version = v.trim() || null; patch.built_at = new Date().toISOString();
+  }
+  const { error } = await sb.from('ideas').update(patch).eq('id', id);
+  if (error) return toastFail(error);
+  if (status === 'built') {
+    const ex = await sb.from('features').select('id').eq('idea_id', id).maybeSingle();
+    if (!ex.data) {
+      const { error: e3 } = await sb.from('features').insert({ idea_id: id, name: t.idea.title, description: t.idea.spec || t.idea.summary || '', version: patch.built_version });
+      if (e3) toastFail(e3);
+    }
+  }
+  toast('Status updated'); await loadThread(id).catch(toastFail); rerenderThread();
+});
+
+// ---------- finger gestures
+// Swipe right on a comment: reply. Swipe left on your own comment: delete. Double-tap: like.
+// Swipe in from the left edge on an idea: back to the feed. Pull down at the top of the feed: refresh.
+let G = null, G_swipedAt = 0, G_swipedEl = null, lastTap = { el: null, t: 0 };
+document.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1 || e.target.closest('.sheet-bg,.lb,.composer,header')) { G = null; return; }
+  const t = e.touches[0], r = route();
+  G = { x0: t.clientX, y0: t.clientY, dx: 0, dy: 0, lock: null, moved: false, type: null };
+  if (r.id && t.clientX < 28) G.type = 'edge';
+  else if (e.target.closest('.c-row')) { G.type = 'row'; G.row = e.target.closest('.c-row'); G.main = G.row.querySelector('.c-main'); }
+  else if (!r.id && r.mode === 'create' && r.tab === 'ideas' && window.scrollY <= 0) G.type = 'pull';
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!G || !G.type) return;
+  const t = e.touches[0]; G.dx = t.clientX - G.x0; G.dy = t.clientY - G.y0;
+  if (!G.lock && (Math.abs(G.dx) > 8 || Math.abs(G.dy) > 8)) { G.lock = Math.abs(G.dx) > Math.abs(G.dy) ? 'x' : 'y'; G.moved = true; }
+  if (G.type === 'row' && G.lock === 'x') {
+    const canLeft = !!G.row.dataset.mine;
+    const d = Math.max(canLeft ? -84 : 0, Math.min(84, G.dx * .6));
+    G.main.style.transition = 'none'; G.main.style.transform = `translateX(${d}px)`;
+    G.row.classList.toggle('arm-r', G.dx > 70); G.row.classList.toggle('arm-l', canLeft && G.dx < -70);
+  } else if (G.type === 'edge' && G.lock === 'x' && G.dx > 0) {
+    const tv = $('#tv'); if (tv) { tv.style.transition = 'none'; tv.style.transform = `translateX(${G.dx * .55}px)`; tv.style.opacity = String(Math.max(.4, 1 - G.dx / 600)); }
+  } else if (G.type === 'pull' && G.lock === 'y' && G.dy > 0 && window.scrollY <= 0) {
+    const p = $('#ptr'); if (p) { const h = Math.min(90, G.dy * .45); p.style.transition = 'none'; p.style.height = h + 'px'; p.classList.toggle('arm', h > 58); }
+  }
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  const g = G; G = null;
+  if (g && g.moved) { G_swipedAt = Date.now(); G_swipedEl = g.type === 'row' ? g.row : g.type === 'edge' ? $('#tv') : g.type === 'pull' ? $('main') : null; }
+  if (g && g.type === 'row') {
+    g.main.style.transition = ''; g.main.style.transform = '';
+    const armR = g.row.classList.contains('arm-r'), armL = g.row.classList.contains('arm-l');
+    g.row.classList.remove('arm-r', 'arm-l');
+    if (g.lock === 'x' && armR) { haptic(); startReply(g.row.dataset.cid); }
+    else if (g.lock === 'x' && armL) { haptic(); delComment(g.row.dataset.cid); }
+  }
+  if (g && g.type === 'edge') {
+    const tv = $('#tv'); if (tv) { tv.style.transition = 'transform .2s, opacity .2s'; tv.style.transform = ''; tv.style.opacity = ''; }
+    if (g.lock === 'x' && g.dx > 90) { haptic(); go('#/create/ideas'); }
+  }
+  if (g && g.type === 'pull') {
+    const p = $('#ptr');
+    if (p) {
+      p.style.transition = '';
+      if (p.classList.contains('arm')) {
+        p.classList.remove('arm'); p.classList.add('spin'); p.style.height = '48px'; haptic();
+        refreshFeed().finally(() => { p.classList.remove('spin'); p.style.height = '0'; });
+      } else p.style.height = '0';
+    }
+  }
+  // double-tap to like (only when the finger did not move)
+  if (g && g.moved) return;
+  const el = e.target.closest && e.target.closest('[data-dbl]');
+  if (!el) { lastTap = { el: null, t: 0 }; return; }
+  const now = Date.now();
+  if (lastTap.el === el && now - lastTap.t < 320) {
+    lastTap = { el: null, t: 0 }; e.preventDefault();
+    const [k, id] = el.dataset.dbl.split(':'); burst(el); toggleLike(k, id, true);
+  } else lastTap = { el, t: now };
+});
+document.addEventListener('dblclick', e => { // mouse: double-click to like
+  const el = e.target.closest('[data-dbl]'); if (!el) return;
+  const [k, id] = el.dataset.dbl.split(':'); burst(el); toggleLike(k, id, true);
+});
 
 // ---------- getting new versions onto the phone quickly
 // A Home Screen app can sit in the background for days without reloading. So: check for a new version whenever the app
@@ -455,9 +968,8 @@ async function viewFeatures(r) {
 const hadSW = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
 let swReg = null, updWait = 0, updLast = 0;
 function busy() {
-  if (document.querySelector('.sheet')) return true;
-  if ([...document.querySelectorAll('textarea, input[type=text]')].some(el => el.value.trim())) return true;
-  return [...document.querySelectorAll('button')].some(b => b.disabled && b.offsetParent);
+  if ($('.sheet-bg') || $('[data-busy]')) return true;
+  return [...document.querySelectorAll('textarea, input[type=text], input:not([type])')].some(el => el.value.trim());
 }
 function watchForUpdates() {
   const check = () => { if (Date.now() - updLast < 60000) return; updLast = Date.now(); swReg.update().catch(() => {}); };
@@ -465,8 +977,8 @@ function watchForUpdates() {
   setInterval(() => { if (!document.hidden) check(); }, 30 * 60000);
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadSW || updWait) return; // first install: nothing to refresh
-    const go = () => { if (busy()) return; clearInterval(updWait); location.reload(); };
-    updWait = setInterval(go, 1500); go();
+    const reload = () => { if (busy()) return; clearInterval(updWait); location.reload(); };
+    updWait = setInterval(reload, 1500); reload();
   });
 }
 async function swInit() {

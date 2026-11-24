@@ -63,3 +63,6 @@ Bump `APP_VERSION` in `index.html` and `VERSION` in `sw.js` with every change. T
 
 - Mobile first. Plain words in the UI, no jargon.
 - Always escape user text before putting it in HTML (`esc()` in `index.html`).
+- The Create side is a social feed. Gestures: swipe right on a comment to reply, swipe left on your own comment to delete, double-tap to like, swipe in from the left edge to go back, pull down on the feed to refresh, swipe down to close sheets and photos. Keep them working when changing the thread or feed.
+- Anything that slides sideways must not be able to widen the page (`main` and `.comments` clip horizontal overflow). Check new layouts on a phone-width screen.
+- Re-render only the part that changed (`#feed`, `#tv`) so the comment box keeps what someone is typing.

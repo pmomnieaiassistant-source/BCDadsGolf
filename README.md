@@ -12,5 +12,8 @@ A golf scoring app that the group designs in the open. **Create** is where ideas
 
 ## Not built yet
 
-- The AI layer (summaries, open questions, "what we would implement" specs). It needs a small Supabase function that holds the Anthropic API key.
 - The Use side (the scoring app itself).
+
+## The AI assistant
+
+`supabase/functions/ai-assist` reads an idea and its discussion and writes the summary, asks the open questions, and proposes the spec. It runs when someone posts or replies, and from the "Refresh summary" button. It is deployed with the `Deploy AI function` workflow and needs the GitHub secret `ANTHROPIC_API_KEY`. Tests: `node --test tests/ai-assist.test.mjs`.

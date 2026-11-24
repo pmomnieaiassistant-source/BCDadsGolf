@@ -33,8 +33,17 @@ Golf math (stableford points, handicap strokes, net scores) has right and wrong 
 
 - Plain HTML/CSS/JS in `index.html` (no build step), `vendor/supabase.js` pinned.
 - Supabase: Postgres + row level security, anonymous sign-in with a group code, `photos` storage bucket.
-- Database setup lives in `supabase/schema.sql`. Schema changes go in `supabase/migrations/` as new, re-runnable SQL files.
+- `supabase/schema.sql` is the full reference setup for a brand new project. Every later schema change goes in `supabase/migrations/` as a NEW, re-runnable SQL file named `YYYYMMDDHHMMSS_short_name.sql` (14-digit timestamp, later than every existing one). Never edit a migration that has already run; add a new one.
 - Deploys as static files (GitHub Pages).
+
+## Database changes (migrations)
+
+The `Database migrate` GitHub workflow (`.github/workflows/db-migrate.yml`) applies `supabase/migrations/` to the live Supabase project. It uses secrets stored in GitHub (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`); never ask for or print those.
+
+- A **dry run** (`dry_run: true`) only lists what would run. It is safe to do at any time, and is how you check the state.
+- **Never start a real run (`dry_run: false`) until Paul has approved that exact change in the chat.** Show him the SQL in plain words first, wait for a clear yes, then trigger the workflow, watch it finish, and report the result. Approval for one change is not approval for the next.
+- Treat anything that drops or deletes data, or changes security rules or permissions, as needing extra care: say plainly what it affects and what cannot be undone.
+- Paul does not want to open GitHub or Supabase for routine changes, so do the whole loop from the session.
 
 ## Shipping
 

@@ -18,6 +18,9 @@ const deps: Deps = {
   limits: { cooldownSec: num('AI_COOLDOWN_SEC', 90), memberHourly: num('AI_MEMBER_HOURLY', 30), dailyCap: num('AI_DAILY_CAP', 300) },
   now: () => new Date(),
   loadBlueprint,
+  agentKey: env('AGENT_KEY'),
+  model: MODEL,
+  log: (event, data) => console.log(JSON.stringify({ fn: 'ai-assist', event, ...data })),
 
   async getUserId(token) {
     const { data, error } = await db.auth.getUser(token);
@@ -99,7 +102,12 @@ const deps: Deps = {
           tool_choice: { type: 'tool', name: 'record_analysis' },
         }),
       });
-      if (!res.ok) throw new Error('claude ' + res.status);
+      if (!res.ok) {
+        // The kind of problem Anthropic reports (for example authentication_error or not_found_error): enough to fix it, never the key.
+        let kind = '';
+        try { const e = await res.json(); kind = String(e?.error?.type ?? '').replace(/[^a-z_]/g, '').slice(0, 40); } catch (_) { /* no body */ }
+        throw new Error('claude ' + res.status + (kind ? ' ' + kind : ''));
+      }
       const out = await res.json();
       // deno-lint-ignore no-explicit-any
       const block = (out.content || []).find((b: any) => b.type === 'tool_use');

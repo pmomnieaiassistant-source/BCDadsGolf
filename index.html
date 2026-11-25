@@ -164,6 +164,10 @@ nav.tabs button.on{color:var(--green)}
 .spunlink{display:block;margin-top:4px;font-size:13px}
 .spquote{margin:0 0 10px;padding:8px 12px;border-left:3px solid var(--line, #d8ddd6);color:var(--muted);font-size:14px;overflow-wrap:anywhere}
 .spin-check{display:flex;align-items:center;gap:10px;margin:10px 0;font-size:15px}.spin-check input{width:20px;height:20px}
+.switch-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.switch{appearance:none;-webkit-appearance:none;flex:none;width:48px;height:28px;border-radius:14px;background:#c9d0c8;position:relative;transition:background .15s;cursor:pointer;margin:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.switch:checked{background:var(--green)}.switch:checked::after{transform:translateX(20px)}.switch:disabled{opacity:.6}
 .readybar{display:flex;align-items:center;gap:12px;justify-content:space-between}.readybar>div{min-width:0}.readybar .btn,.readybar .linkbtn{flex:none;white-space:nowrap}.readybar.ready{border-left:4px solid var(--gold)}.readybar.building{border-left:4px solid #22498c}
 .admin{display:flex;align-items:center;gap:10px}
 .admin select{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
@@ -265,7 +269,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.5';
+const APP_VERSION = '0.5.9';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -647,16 +651,14 @@ async function loadThread(id) {
     const cl = await sb.from('comment_likes').select('comment_id,member_id').in('comment_id', cids);
     if (!cl.error) { const m = setLikes('comment', cl.data, 'comment_id'); cids.forEach(c => LK.comment.set(c, m.get(c) || { n: 0, mine: false })); }
   }
-  let readyName = null;
-  if (iq.data?.ready_by) { const m = await sb.from('members').select('name').eq('id', iq.data.ready_by).maybeSingle(); readyName = m.data?.name || null; }
   let source = null;
   if (iq.data?.source_idea_id) { const si = await sb.from('ideas').select('id,title,status').eq('id', iq.data.source_idea_id).maybeSingle(); source = si.data || null; }
-  S.threads[id] = { idea: iq.data, atts: aq.data, polls: pq.data, comments: cq.data, readyName, source };
+  S.threads[id] = { idea: iq.data, atts: aq.data, polls: pq.data, comments: cq.data, source };
 }
 function threadHTML(id) {
   const t = S.threads[id];
   if (!t) return threadSkeleton();
-  const { idea, atts, polls, comments, readyName, source } = t;
+  const { idea, atts, polls, comments, source } = t;
   const spinOk = comments.length > 0 && 'spun_idea_id' in comments[0]; // false until the database has the spin-off update
   if (!idea) return `<div class="empty"><p>That idea was not found. It may have been deleted.</p><button class="btn" data-go="${backHash()}">Go back</button></div>`;
   const pics = cid => atts.filter(x => (x.comment_id || null) === cid).map(x => x.path);
@@ -676,13 +678,11 @@ function threadHTML(id) {
     <div class="p-actions">${likeAct('idea', id)}<button class="act" data-act="focus-composer">${icon('chat')}<span>${comments.length || ''}</span></button>
       <span class="spacer"></span><button class="act" data-act="new-poll">${icon('poll')}<span>Poll</span></button></div></article>`;
 
-  // The build queue: any member can mark an idea Ready (and take it back) until Claude starts building; then it is locked.
-  const ready = !('ready_by' in idea) ? '' : idea.status === 'open'
-    ? `<div class="card readybar"><div><b>Ready to build?</b><div class="muted sm">When the group has talked it through, put it in the build queue. You can take it back until Claude starts building.</div></div><button class="btn" data-act="set-ready" data-on="1">Ready to build</button></div>`
-    : idea.status === 'ready'
-    ? `<div class="card readybar ready"><div><b>In the build queue</b><div class="muted sm">${readyName ? 'Marked ready by ' + esc(readyName) + '. ' : ''}You can take it back until Claude starts building.</div></div><button class="linkbtn" data-act="set-ready" data-on="0">Take it back</button></div>`
-    : idea.status === 'building'
-    ? `<div class="card readybar building"><div><b>Claude is building this</b><div class="muted sm">It is locked while that happens. When it is done it moves to the Features tab.</div></div></div>` : '';
+  // One control for everyone: a Ready to build switch, until Claude starts building (then it is locked, and Claude sets Building and Built).
+  const ready = !('ready_by' in idea) ? '' : (idea.status === 'open' || idea.status === 'ready')
+    ? `<div class="card readybar ${idea.status === 'ready' ? 'ready' : ''}"><label class="switch-row"><b>Ready to build</b>
+      <input type="checkbox" role="switch" class="switch" id="ready" ${idea.status === 'ready' ? 'checked' : ''}></label></div>`
+    : idea.status === 'building' ? `<div class="card readybar building"><b>Claude is building this</b></div>` : '';
   const ai = `<div class="ai-card"><div class="ai-head">${avatar('', 26, true)}<b>Assistant summary</b><span class="spacer"></span>
       ${idea.ai_updated_at ? `<span class="muted sm">${ago(idea.ai_updated_at)}</span>` : ''}</div>
     ${idea.summary ? `<div style="white-space:pre-wrap">${esc(idea.summary)}</div>` : `<div class="muted">The assistant hasn't summarized this idea yet.</div>`}
@@ -691,9 +691,6 @@ function threadHTML(id) {
       : `<button class="linkbtn" data-act="ai-refresh">${icon('refresh', 15)}Refresh summary</button>`}
       ${aiNote[id] ? `<span class="muted">${esc(aiNote[id])}</span>` : ''}</div>`}</div>`;
   const spec = idea.spec ? `<div class="card spec"><div class="label" style="color:var(--gold);margin:0 0 4px">What we would implement</div><div style="white-space:pre-wrap">${esc(idea.spec)}</div></div>` : '';
-  const admin = S.me.is_admin ? `<div class="card admin"><b class="sm">Status</b><select id="status" aria-label="Status">
-    ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>` : '';
-
   const row = (c, reply) => {
     const mine = c.author_id === uid() || S.me.is_admin;
     const isQ = c.is_ai && c.kind === 'question';
@@ -715,7 +712,7 @@ function threadHTML(id) {
       + kids.slice(hidden).map(k => row(k, true)).join('');
   }).join('');
 
-  return `${post}${ready}${ai}${spec}${admin}
+  return `${post}${ready}${ai}${spec}
     <div class="c-title"><b>${comments.length ? `${comments.length} comment${comments.length > 1 ? 's' : ''}` : 'Comments'}</b></div>
     <div class="comments">${threadList || `<div class="empty" style="padding:24px">No comments yet. Start the conversation below.</div>`}</div>
     ${comments.length ? `<p class="hint">Swipe right on a comment to reply · double-tap to like</p>` : ''}`;
@@ -1109,14 +1106,6 @@ const ACT = {
   'cancel-reply': () => cancelReply(),
   'focus-composer': () => $('#ctext')?.focus(),
   'ai-refresh': () => askAI(route().id, { manual: true, force: true }),
-  'set-ready': async a => {
-    const id = route().id, on = a.dataset.on === '1';
-    a.disabled = true;
-    const { error } = await sb.rpc('set_ready', { p_idea_id: id, p_ready: on });
-    if (error) { a.disabled = false; return toastFail(error); }
-    S.feed = null; toast(on ? 'Marked ready to build' : 'Taken back to Open');
-    await loadThread(id).catch(toastFail); rerenderThread();
-  },
   'del-idea': async () => {
     if (!confirm('Delete this idea and everything in it?')) return;
     const { error } = await sb.from('ideas').delete().eq('id', route().id);
@@ -1154,23 +1143,12 @@ document.addEventListener('click', e => {
   if (d.open) return go('#/create/ideas/' + d.open);
 });
 document.addEventListener('change', async e => {
-  if (e.target.id !== 'status') return;
-  const id = route().id, t = S.threads[id], status = e.target.value, patch = { status };
-  if (status === 'built') {
-    const v = prompt('Which app version is this built in? (for example 0.2)', t?.idea?.built_version || '');
-    if (v === null) return rerenderThread();
-    patch.built_version = v.trim() || null; patch.built_at = new Date().toISOString();
-  }
-  const { error } = await sb.from('ideas').update(patch).eq('id', id);
-  if (error) return toastFail(error);
-  if (status === 'built') {
-    const ex = await sb.from('features').select('id').eq('idea_id', id).maybeSingle();
-    if (!ex.data) {
-      const { error: e3 } = await sb.from('features').insert({ idea_id: id, name: t.idea.title, description: t.idea.spec || t.idea.summary || '', version: patch.built_version });
-      if (e3) toastFail(e3);
-    }
-  }
-  toast('Status updated'); await loadThread(id).catch(toastFail); rerenderThread();
+  if (e.target.id !== 'ready') return;
+  const id = route().id, on = e.target.checked;
+  e.target.disabled = true;
+  const { error } = await sb.rpc('set_ready', { p_idea_id: id, p_ready: on }); // records who set it, so the assistant never undoes it
+  if (error) toastFail(error); else { S.feed = null; toast(on ? 'Marked ready to build' : 'Taken back to Open'); }
+  await loadThread(id).catch(toastFail); rerenderThread();
 });
 
 // ---------- finger gestures

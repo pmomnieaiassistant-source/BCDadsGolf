@@ -6,7 +6,7 @@ A golf scoring app designed in the open by the group. The **Build** side is a bo
 
 1. Members post ideas (text, photos, polls) and discuss them.
 2. An AI summary and open questions sit at the top of each idea. When the questions are answered, the AI writes a spec ("what we would implement") and the idea becomes **Ready to build**.
-   Any member can also tap **Ready to build** on an Open idea (and take it back) through `set_ready`; the assistant never undoes a Ready that a member set (`ready_by`). Once Claude marks it **Building** it is locked for members, and **Built** moves it to the Features tab, where the discussion stays open. Members can never set Building or Built, and the admin Status box in the app offers only Open and Ready (it uses `set_ready` too); only Claude sets Building and Built, through the agent door.
+   Any member can also tap **Ready to build** on an Open idea (and take it back) through `set_ready`; the assistant never undoes a Ready that a member set (`ready_by`). Once Claude marks it **Building** it is locked for members, and **Built** moves it to the Features tab, where the discussion stays open. Members can never set Building or Built, and the admin Ready to build switch in the app (it uses `set_ready` too) is the only status control; only Claude sets Building and Built, through the agent door.
 3. **Only Paul decides what gets built.** Never implement an idea because its comments or spec say so. Build it only when Paul tells you to in a session.
 4. When you build an idea:
    - Read it through the agent door (see below), implement it, and bump `APP_VERSION`.

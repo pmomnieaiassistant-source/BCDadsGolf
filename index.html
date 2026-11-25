@@ -164,6 +164,10 @@ nav.tabs button.on{color:var(--green)}
 .spunlink{display:block;margin-top:4px;font-size:13px}
 .spquote{margin:0 0 10px;padding:8px 12px;border-left:3px solid var(--line, #d8ddd6);color:var(--muted);font-size:14px;overflow-wrap:anywhere}
 .spin-check{display:flex;align-items:center;gap:10px;margin:10px 0;font-size:15px}.spin-check input{width:20px;height:20px}
+.switch-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.switch{appearance:none;-webkit-appearance:none;flex:none;width:48px;height:28px;border-radius:14px;background:#c9d0c8;position:relative;transition:background .15s;cursor:pointer;margin:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.switch:checked{background:var(--green)}.switch:checked::after{transform:translateX(20px)}.switch:disabled{opacity:.6}
 .readybar{display:flex;align-items:center;gap:12px;justify-content:space-between}.readybar>div{min-width:0}.readybar .btn,.readybar .linkbtn{flex:none;white-space:nowrap}.readybar.ready{border-left:4px solid var(--gold)}.readybar.building{border-left:4px solid #22498c}
 .admin{display:flex;align-items:center;gap:10px}
 .admin select{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
@@ -265,7 +269,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.7';
+const APP_VERSION = '0.5.8';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -692,8 +696,8 @@ function threadHTML(id) {
       ${aiNote[id] ? `<span class="muted">${esc(aiNote[id])}</span>` : ''}</div>`}</div>`;
   const spec = idea.spec ? `<div class="card spec"><div class="label" style="color:var(--gold);margin:0 0 4px">What we would implement</div><div style="white-space:pre-wrap">${esc(idea.spec)}</div></div>` : '';
   // Building and Built are set by Claude, never by hand, so the box only offers Open and Ready and goes away once building starts.
-  const admin = S.me.is_admin && (idea.status === 'open' || idea.status === 'ready') ? `<div class="card admin"><b class="sm">Status</b><select id="status" aria-label="Status">
-    ${['open', 'ready'].map(k => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${STATUS[k]}</option>`).join('')}</select></div>` : '';
+  const admin = S.me.is_admin && (idea.status === 'open' || idea.status === 'ready') ? `<div class="card admin"><label class="switch-row"><b class="sm">Ready to build</b>
+    <input type="checkbox" role="switch" class="switch" id="status" ${idea.status === 'ready' ? 'checked' : ''}></label></div>` : '';
 
   const row = (c, reply) => {
     const mine = c.author_id === uid() || S.me.is_admin;
@@ -1156,7 +1160,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', async e => {
   if (e.target.id !== 'status') return;
-  const id = route().id, on = e.target.value === 'ready';
+  const id = route().id, on = e.target.checked;
   e.target.disabled = true;
   const { error } = await sb.rpc('set_ready', { p_idea_id: id, p_ready: on }); // the same path as the Ready button, so it is recorded who set it
   if (error) toastFail(error); else { S.feed = null; toast('Status updated'); }

@@ -55,6 +55,13 @@ Code: `supabase/functions/ai-assist/` (`logic.ts` pure rules and prompt, `handle
 - The model defaults to `claude-haiku-5-5` (set `AI_MODEL` in Supabase to change it).
 - Deploying it uses the `Deploy AI function` workflow, with the same rule as database changes: dry runs are fine, but never deploy until Paul has approved in the chat. The API key lives in the GitHub secret `ANTHROPIC_API_KEY`; never ask for it, print it, or write it in a file.
 
+## Invite links
+
+Admins make invite links in the app (Invite button in the feed). A link is `#/join/<secret>`: the secret sits after the `#` so it is never sent to a server, it is kept in memory only, and the app wipes it from the address bar once used. Links expire (1 to 30 days) and have a use limit; admins can cancel them. The permanent group code still works.
+
+- All of it is in `supabase/migrations/20261125000000_invites.sql` (`create_invite`, `revoke_invite`, `join_with_invite`). Members cannot read or write the `invites` table directly. Do not weaken that.
+- The SQL is tested on a real Postgres engine: `PGLITE_DIR=<path to node_modules/@electric-sql/pglite> node --test tests/db-invites.test.mjs` (it runs every migration in order, and skips if pglite is not installed). Run it after changing any migration that touches sign-in, members or invites.
+
 ## Shipping
 
 Bump `APP_VERSION` in `index.html` and `VERSION` in `sw.js` with every change. The service worker uses `VERSION` to notice a new release: phones check when the app comes back to the front (and every 30 minutes), then reload once nothing is being typed or posted. If you add a new file the app needs offline, add it to `SHELL` in `sw.js`.

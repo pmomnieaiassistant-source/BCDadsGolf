@@ -73,6 +73,9 @@ nav.tabs button.on{color:var(--green)}
 .menu .mh{font-size:12px;font-weight:700;color:var(--muted);padding:6px 12px 4px}
 .menu button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:11px 12px;border-radius:10px;font-weight:600;font-size:15px;text-align:left}
 .menu button:active{background:var(--soft)}
+.lk{color:var(--green);font-weight:700;padding:6px 4px}.lk.muted{color:var(--muted)}
+.inv{display:flex;align-items:center;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.inv-t{flex:1;display:flex;flex-direction:column;line-height:1.3}
 .menu .chk{color:var(--green)}
 @keyframes menuIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
 .post{background:var(--card);border-radius:18px;padding:14px 14px 6px;margin-bottom:10px;box-shadow:var(--shadow);cursor:pointer;position:relative}
@@ -189,7 +192,7 @@ nav.tabs button.on{color:var(--green)}
 .sh-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .sh-head h2{font-size:17px;margin:0}
 .sh-head .cancel{color:var(--muted);font-weight:600}
-.btn{background:var(--green);color:var(--on-green);border-radius:999px;padding:8px 18px;font-weight:700}
+.btn{background:var(--green);color:var(--on-green);border-radius:999px;padding:8px 18px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:7px}
 .btn:disabled{opacity:.45}
 .btn.ghost{background:var(--soft);color:var(--green)}
 .field{width:100%;border:0;background:transparent;outline:none;padding:8px 2px}
@@ -237,12 +240,19 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.3.2';
+const APP_VERSION = '0.4.0';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
 const S = { user: null, me: null, feed: null, sort: SORTS[savedSort] ? savedSort : 'popular', threads: {}, open: new Set(), replyTo: null, files: [], likesOn: true, feedScroll: 0 };
 const LK = { idea: new Map(), comment: new Map() };
+// An invite link looks like  #/join/<secret>. The secret sits after the # so it is never sent to any server.
+// It is kept in memory only, never saved, and wiped from the address bar as soon as it is used.
+let INVITE = (location.hash.match(/^#\/join\/([A-Za-z0-9_-]{16,64})$/) || [])[1] || null;
+function dropInvite() {
+  INVITE = null;
+  try { history.replaceState(null, '', location.pathname + location.search + '#/use'); } catch (_) { location.hash = '#/use'; }
+}
 
 // ---------- helpers
 const $ = (q, el = document) => el.querySelector(q);
@@ -287,6 +297,8 @@ const ICONS = {
   star: '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
   flag: '<path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  userplus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   menu: '<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
 };
@@ -341,7 +353,7 @@ async function boot() {
   if (session) {
     S.user = session.user;
     const { data, error } = await sb.from('members').select('*').eq('id', S.user.id).maybeSingle();
-    if (data) { S.me = data; return render(); }
+    if (data) { S.me = data; if (INVITE) dropInvite(); return render(); }
     // A failed lookup is not the same as "not joined": say so instead of asking for the code again.
     if (error) {
       app.innerHTML = `<main><div class="join card"><h2>Can't reach the group</h2>
@@ -353,20 +365,26 @@ async function boot() {
   joinScreen();
 }
 
-function joinScreen(msg) {
+function joinScreen(msg, { code = false } = {}) {
   document.body.className = '';
+  const viaInvite = !!INVITE && !code;
   app.innerHTML = `<main><div class="join">
     <div class="use" style="padding:0 0 10px"><div class="flag">${icon('flag', 34)}</div></div>
-    <h2>BC Dads Golf</h2>
-    <p class="muted" style="margin:0">Enter the group code and the name the dads will see.</p>
-    <label for="code">Group code</label><input id="code" type="text" autocomplete="off" autocapitalize="off">
-    <label for="jname">Your name</label><input id="jname" type="text" maxlength="40" autocomplete="off">
+    <h2>${viaInvite ? "You're invited" : 'BC Dads Golf'}</h2>
+    <p class="muted" style="margin:0">${viaInvite ? 'Pick the name the dads will see, then tap Join.' : 'Enter the group code and the name the dads will see.'}</p>
+    ${viaInvite ? '' : '<label for="code">Group code</label><input id="code" type="text" autocomplete="off" autocapitalize="off">'}
+    <label for="jname">Your name</label><input id="jname" type="text" maxlength="40" autocomplete="off" autocapitalize="words">
     <p class="err" id="jerr">${esc(msg || (storageOk() ? '' : NO_STORAGE))}</p>
     <button class="btn" id="join">Join</button>
+    ${INVITE ? `<p style="text-align:center"><button class="lk" id="swap">${viaInvite ? 'I have a group code instead' : 'I have an invite link'}</button></p>` : ''}
     <p class="foot">BC Dads Golf v${APP_VERSION}</p></div></main>`;
+  const swap = document.getElementById('swap');
+  if (swap) swap.onclick = () => joinScreen('', { code: viaInvite });
+  const nameEl = document.getElementById('jname');
+  nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('join').click(); });
   document.getElementById('join').onclick = async (ev) => {
     const btn = ev.target, err = document.getElementById('jerr');
-    err.textContent = ''; btn.disabled = true;
+    err.textContent = ''; btn.disabled = true; btn.dataset.busy = '1';
     try {
       let { data: { session } } = await sb.auth.getSession();
       if (!session) {
@@ -375,12 +393,15 @@ function joinScreen(msg) {
         session = r.data.session;
       }
       S.user = session.user;
-      const { error } = await sb.rpc('join_group', { p_code: document.getElementById('code').value.trim(), p_name: document.getElementById('jname').value });
+      const { error } = viaInvite
+        ? await sb.rpc('join_with_invite', { p_token: INVITE, p_name: nameEl.value })
+        : await sb.rpc('join_group', { p_code: document.getElementById('code').value.trim(), p_name: nameEl.value });
       if (error) throw error;
       const { data } = await sb.from('members').select('*').eq('id', S.user.id).single();
-      S.me = data; document.getElementById('code').value = ''; document.getElementById('jname').value = '';
-      if (!location.hash) go('#/use'); render();
-    } catch (e) { err.textContent = e.message; btn.disabled = false; }
+      S.me = data; nameEl.value = '';
+      if (INVITE) dropInvite(); else if (!location.hash) go('#/use');
+      render();
+    } catch (e) { err.textContent = e.message; btn.disabled = false; delete btn.dataset.busy; }
   };
 }
 
@@ -523,7 +544,7 @@ async function loadFeed() {
 function feedHTML() {
   const list = sortIdeas(S.feed || [], S.sort);
   return `<button class="prompt" data-act="new-idea">${avatar(S.me.name, 38)}<span class="ptext">What should the app do?</span>${icon('image', 22)}</button>
-    <div class="feedbar"><button class="sortbtn" data-act="sort-menu" aria-label="Sort posts" aria-haspopup="true">${esc(SORTS[S.sort])}${icon('menu', 18)}</button></div>
+    <div class="feedbar">${S.me.is_admin ? `<button class="sortbtn" data-act="invite" style="margin-right:auto" aria-label="Invite someone">${icon('userplus', 18)}Invite</button>` : ''}<button class="sortbtn" data-act="sort-menu" aria-label="Sort posts" aria-haspopup="true">${esc(SORTS[S.sort])}${icon('menu', 18)}</button></div>
     ${list.length ? list.map(postCard).join('') : `<div class="empty">${icon('ideas', 40)}<p>No ideas yet. Be the first to post one.</p></div>`}`;
 }
 // New: newest first. Popular: likes and comments, fading as a post goes quiet (so fresh activity lifts it again).
@@ -840,6 +861,64 @@ function pollSheet(id) {
   };
 }
 
+// ---------- invite links (admins)
+const inviteUrl = tok => `${location.origin}${location.pathname}#/join/${tok}`;
+function inviteSheet() {
+  sheet(`<div class="sh-head"><button class="cancel" data-x>Done</button><h2>Invite someone</h2><span style="width:48px"></span></div>
+    <p class="muted" style="margin-top:0">Make a link and text it to a friend. They open it, type their name and tap Join. You can cancel it any time.</p>
+    <div class="row" style="align-items:flex-end;gap:10px;margin-bottom:10px">
+      <label class="sm muted" style="flex:1">Works for<select class="opt-in" id="idays"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select></label>
+      <label class="sm muted" style="flex:1">Up to<select class="opt-in" id="iuses"><option value="1">1 person</option><option value="5">5 people</option><option value="10" selected>10 people</option><option value="25">25 people</option></select></label></div>
+    <button class="btn" data-act="invite-make" style="width:100%">Create invite link</button>
+    <div id="inew"></div><p class="err" id="ierr"></p>
+    <div class="label" style="color:var(--muted);margin-top:14px">Active links</div><div id="ilist"><p class="muted sm">Loading...</p></div>`);
+  document.querySelector('.sheet-bg [data-x]').onclick = () => document.querySelector('.sheet-bg')?.click();
+  loadInvites();
+}
+async function loadInvites() {
+  const box = $('#ilist'); if (!box) return;
+  const { data, error } = await sb.from('invites').select('token,created_at,expires_at,max_uses,uses')
+    .eq('revoked', false).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false });
+  if (!$('#ilist')) return;
+  if (error) { $('#ilist').innerHTML = `<p class="muted sm">${esc(/invites|schema cache|permission/i.test(error.message) ? 'Invite links need a database update first.' : error.message)}</p>`; return; }
+  $('#ilist').innerHTML = data.length ? data.map(i => `<div class="inv"><div class="inv-t"><b>${i.uses} of ${i.max_uses} used${i.uses >= i.max_uses ? ' (full)' : ''}</b>
+      <span class="muted sm">Made ${ago(i.created_at) === 'now' ? 'just now' : ago(i.created_at) + ' ago'} · ends ${new Date(i.expires_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span></div>
+      <button class="lk" data-act="invite-share" data-tok="${esc(i.token)}">Share</button>
+      <button class="lk muted" data-act="invite-revoke" data-tok="${esc(i.token)}">Cancel</button></div>`).join('') : '<p class="muted sm">No active links.</p>';
+}
+async function makeInvite(btn) {
+  const err = $('#ierr'); err.textContent = ''; btn.disabled = true; btn.dataset.busy = '1';
+  try {
+    const { data, error } = await sb.rpc('create_invite', { p_days: +$('#idays').value, p_uses: +$('#iuses').value });
+    if (error) throw error;
+    $('#inew').innerHTML = `<div class="card" style="box-shadow:none;border:1px solid var(--line);margin:12px 0 0">
+      <div class="sm muted" style="margin-bottom:6px">Your new link. Tap Share to send it.</div>
+      <input class="opt-in" readonly id="ilink" value="${esc(inviteUrl(data.token))}" onfocus="this.select()" aria-label="Invite link">
+      <div class="row" style="margin-top:8px"><button class="btn" data-act="invite-share" data-tok="${esc(data.token)}">${icon('send', 16)} Share</button>
+      <button class="btn ghost" data-act="invite-copy" data-tok="${esc(data.token)}">${icon('link', 16)} Copy link</button></div></div>`;
+    loadInvites();
+  } catch (e) { err.textContent = /invites|schema cache|function/i.test(e.message) ? 'Invite links need a database update first.' : e.message; }
+  finally { btn.disabled = false; delete btn.dataset.busy; }
+}
+async function copyInvite(tok) {
+  const url = inviteUrl(tok);
+  try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch (_) { prompt('Copy this link:', url); }
+}
+async function shareInvite(tok) {
+  const url = inviteUrl(tok);
+  if (navigator.share) {
+    try { await navigator.share({ title: 'BC Dads Golf', text: 'Join us on BC Dads Golf', url }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  copyInvite(tok);
+}
+async function revokeInvite(tok) {
+  if (!confirm('Cancel this link? People who already joined with it stay in the group.')) return;
+  const { error } = await sb.rpc('revoke_invite', { p_token: tok });
+  if (error) return toastFail(error);
+  toast('Link cancelled'); loadInvites();
+}
+
 // ---------- features
 async function renderFeatures(r) {
   shell(r, `<div id="fv">${feedSkeleton()}</div>`);
@@ -864,6 +943,11 @@ async function renderFeatures(r) {
 const ACT = {
   'new-idea': () => newIdeaSheet(),
   'sort-menu': () => toggleSortMenu(),
+  'invite': () => inviteSheet(),
+  'invite-make': a => makeInvite(a),
+  'invite-share': a => shareInvite(a.dataset.tok),
+  'invite-copy': a => copyInvite(a.dataset.tok),
+  'invite-revoke': a => revokeInvite(a.dataset.tok),
   'new-poll': () => pollSheet(route().id),
   'send': () => sendComment(),
   'pick-photo': () => $('#cfile')?.click(),
@@ -880,7 +964,7 @@ const ACT = {
 };
 document.addEventListener('click', e => {
   if (G_swipedEl && Date.now() - G_swipedAt < 350 && G_swipedEl.contains(e.target)) return; // that was the end of a swipe, not a tap
-  if (!e.target.closest('.menu,.sortbtn')) closeSortMenu();
+  if (!e.target.closest('.menu,[data-act="sort-menu"]')) closeSortMenu();
   const a = e.target.closest('[data-go],[data-act],[data-like],[data-vote],[data-reply],[data-more],[data-delpoll],[data-sort],[data-lb],[data-stop],[data-open]');
   if (!a) return;
   const d = a.dataset;

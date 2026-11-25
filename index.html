@@ -265,7 +265,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.6';
+const APP_VERSION = '0.5.7';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -691,8 +691,9 @@ function threadHTML(id) {
       : `<button class="linkbtn" data-act="ai-refresh">${icon('refresh', 15)}Refresh summary</button>`}
       ${aiNote[id] ? `<span class="muted">${esc(aiNote[id])}</span>` : ''}</div>`}</div>`;
   const spec = idea.spec ? `<div class="card spec"><div class="label" style="color:var(--gold);margin:0 0 4px">What we would implement</div><div style="white-space:pre-wrap">${esc(idea.spec)}</div></div>` : '';
-  const admin = S.me.is_admin ? `<div class="card admin"><b class="sm">Status</b><select id="status" aria-label="Status">
-    ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>` : '';
+  // Building and Built are set by Claude, never by hand, so the box only offers Open and Ready and goes away once building starts.
+  const admin = S.me.is_admin && (idea.status === 'open' || idea.status === 'ready') ? `<div class="card admin"><b class="sm">Status</b><select id="status" aria-label="Status">
+    ${['open', 'ready'].map(k => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${STATUS[k]}</option>`).join('')}</select></div>` : '';
 
   const row = (c, reply) => {
     const mine = c.author_id === uid() || S.me.is_admin;
@@ -1155,22 +1156,11 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', async e => {
   if (e.target.id !== 'status') return;
-  const id = route().id, t = S.threads[id], status = e.target.value, patch = { status };
-  if (status === 'built') {
-    const v = prompt('Which app version is this built in? (for example 0.2)', t?.idea?.built_version || '');
-    if (v === null) return rerenderThread();
-    patch.built_version = v.trim() || null; patch.built_at = new Date().toISOString();
-  }
-  const { error } = await sb.from('ideas').update(patch).eq('id', id);
-  if (error) return toastFail(error);
-  if (status === 'built') {
-    const ex = await sb.from('features').select('id').eq('idea_id', id).maybeSingle();
-    if (!ex.data) {
-      const { error: e3 } = await sb.from('features').insert({ idea_id: id, name: t.idea.title, description: t.idea.spec || t.idea.summary || '', version: patch.built_version });
-      if (e3) toastFail(e3);
-    }
-  }
-  toast('Status updated'); await loadThread(id).catch(toastFail); rerenderThread();
+  const id = route().id, on = e.target.value === 'ready';
+  e.target.disabled = true;
+  const { error } = await sb.rpc('set_ready', { p_idea_id: id, p_ready: on }); // the same path as the Ready button, so it is recorded who set it
+  if (error) toastFail(error); else { S.feed = null; toast('Status updated'); }
+  await loadThread(id).catch(toastFail); rerenderThread();
 });
 
 // ---------- finger gestures

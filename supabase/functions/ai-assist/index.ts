@@ -17,6 +17,8 @@ const loadBlueprint = makeBlueprintLoader((url, init) => fetch(url, init), () =>
 // The advisor: a stronger model the main one may consult once for strategic direction. 'off' (or empty) turns it off.
 const ADVISOR_RAW = env('AI_ADVISOR', 'claude-opus-5-5').trim();
 const ADVISOR: string | null = ['', 'off', 'none'].includes(ADVISOR_RAW.toLowerCase()) ? null : ADVISOR_RAW;
+// Brainstorm may search the web for inspiration. AI_WEB_SEARCH=off turns it off.
+const WEB_SEARCH = env('AI_WEB_SEARCH', 'on').trim().toLowerCase() !== 'off';
 const claude = makeClaude({ apiKey: () => env('ANTHROPIC_API_KEY'), model: MODEL, advisor: ADVISOR, fetchFn: (url, init) => fetch(url, init) });
 
 const deps: Deps = {
@@ -26,6 +28,7 @@ const deps: Deps = {
   agentKey: env('AGENT_KEY'),
   model: MODEL,
   advisor: ADVISOR,
+  webSearch: WEB_SEARCH,
   log: (event, data) => console.log(JSON.stringify({ fn: 'ai-assist', event, ...data })),
 
   async getUserId(token) {
@@ -97,8 +100,13 @@ const deps: Deps = {
   callClaude: (system, user, tool, model, advisor, opts) => claude(system, user, tool, model, advisor, opts),
 
   async loadBoard() {
-    const { data } = await db.from('ideas').select('title,status').order('created_at', { ascending: false }).limit(60);
-    return (data || []).map((o: { title: string; status: string }) => ({ title: o.title, status: o.status }));
+    const { data } = await db.from('ideas').select('title,status,summary').order('created_at', { ascending: false }).limit(60);
+    return (data || []).map((o: { title: string; status: string; summary: string | null }) => ({ title: o.title, status: o.status, summary: o.summary }));
+  },
+
+  async loadFeatures() {
+    const { data } = await db.from('features').select('name,description,version').order('created_at', { ascending: false }).limit(40);
+    return (data || []).map((f: { name: string; description: string; version: string | null }) => ({ name: f.name, description: f.description, version: f.version }));
   },
 
   async save(ideaId, plan) {

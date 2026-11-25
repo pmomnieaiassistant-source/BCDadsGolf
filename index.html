@@ -258,6 +258,7 @@ textarea.field{min-height:120px;resize:none}
 .stub-wrap.drag-r .stub-bg.add,.stub-wrap.drag-l .stub-bg.skip{opacity:.55}.stub-wrap.arm-add .stub-bg.add,.stub-wrap.arm-skip .stub-bg.skip{opacity:1}
 .stub{position:relative;background:var(--card);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);touch-action:pan-y;transition:transform .2s}
 .stub h3{margin:0 0 6px;font-size:18px;overflow-wrap:anywhere}.stub p{margin:0 0 12px;color:var(--ink2);overflow-wrap:anywhere}
+.stub .stub-note{margin:-6px 0 12px;font-size:13px;color:var(--muted)}
 .stub-actions{display:flex;gap:10px;justify-content:flex-end}.stub-actions .btn{padding:8px 16px}
 .bs-more{text-align:center;padding:8px 0 18px}.bs-more .btn{margin-top:4px}
 .f-card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
@@ -279,7 +280,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.15';
+const APP_VERSION = '0.5.16';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -1126,7 +1127,7 @@ function bsDraw() {
   const b = S.bs, live = b.items.filter(x => x.state === 'new' || x.state === 'adding');
   el.innerHTML = `<div class="bs-head"><h2>Brainstorm</h2><p class="muted">Starter ideas from the assistant. Swipe a card right to add it to the board, or left to skip it.</p></div>
     ${live.map(x => `<div class="stub-wrap" data-sid="${esc(x.id)}"><div class="stub-bg add">${icon('plus', 20)}Add idea</div><div class="stub-bg skip">Skip${icon('x', 20)}</div>
-      <article class="stub"><h3>${esc(x.title)}</h3><p>${esc(x.description)}</p>
+      <article class="stub"><h3>${esc(x.title)}</h3><p>${esc(x.description)}</p>${x.inspiration ? `<p class="stub-note">Inspired by: ${esc(x.inspiration)}</p>` : ''}
         <div class="stub-actions"><button class="btn ghost" data-bs="skip:${esc(x.id)}" ${x.state === 'adding' ? 'disabled' : ''}>Skip</button>
           <button class="btn" data-bs="add:${esc(x.id)}" ${x.state === 'adding' ? 'disabled' : ''}>${x.state === 'adding' ? 'Adding...' : 'Add to board'}</button></div></article></div>`).join('')}
     ${b.loading ? feedSkeleton() : ''}
@@ -1142,9 +1143,9 @@ async function bsFetch() {
       let msg = ''; try { msg = (await error.context.json()).error; } catch (_) {}
       throw new Error(msg === 'Bad idea id.' ? 'Brainstorm is not switched on yet. Try again in a minute.' : msg || 'The assistant is not available right now.');
     }
-    const ideas = (Array.isArray(data?.ideas) ? data.ideas : []).map(x => ({ title: bsClean(x?.title, 90), description: bsClean(x?.description, 420) })).filter(x => x.title.length >= 3 && x.description);
+    const ideas = (Array.isArray(data?.ideas) ? data.ideas : []).map(x => ({ title: bsClean(x?.title, 90), description: bsClean(x?.description, 420), inspiration: bsClean(x?.inspiration, 100) })).filter(x => x.title.length >= 3 && x.description);
     if (!ideas.length) throw new Error('No ideas came back. Try again.');
-    for (const x of ideas) { b.items.push({ id: 'bs' + (++bsN) + Date.now().toString(36), title: x.title, description: x.description, state: 'new' }); b.seen.push(x.title); }
+    for (const x of ideas) { b.items.push({ id: 'bs' + (++bsN) + Date.now().toString(36), title: x.title, description: x.description, inspiration: x.inspiration, state: 'new' }); b.seen.push(x.title); }
     b.at = Date.now(); bsSave();
   } catch (e) { b.error = e.message || 'Something went wrong. Try again.'; }
   finally { b.loading = false; if (S.me && route().tab === 'brainstorm') bsDraw(); }
@@ -1157,7 +1158,7 @@ async function bsAct(what) {
   if (act !== 'add') return;
   it.state = 'adding'; bsDraw();
   try {
-    const { data, error } = await sb.from('ideas').insert({ author_id: uid(), title: it.title, body: it.description }).select('id').single();
+    const { data, error } = await sb.from('ideas').insert({ author_id: uid(), title: it.title, body: it.inspiration ? `${it.description}\n\nInspired by: ${it.inspiration}` : it.description }).select('id').single();
     if (error) throw error;
     it.state = 'added'; S.feed = null; bsSave(); haptic(); toast('Added to the board');
     askAI(data.id); // the assistant summarizes it like any new idea
@@ -1168,7 +1169,7 @@ async function renderBrainstorm(r) {
   shell(r, `<div id="bs"></div>`, { back: { hash: '#/create/ideas', label: 'Ideas' } });
   if (!S.bs || S.bs.uid !== uid()) {
     const c = bsRestore();
-    S.bs = { uid: uid(), items: c ? c.items.map(x => ({ id: 'bs' + (++bsN), title: bsClean(x.title, 90), description: bsClean(x.description, 420), state: 'new' })).filter(x => x.title && x.description) : [], seen: c ? c.seen.filter(x => typeof x === 'string') : [], at: c ? c.at : 0, loading: false, error: '' };
+    S.bs = { uid: uid(), items: c ? c.items.map(x => ({ id: 'bs' + (++bsN), title: bsClean(x.title, 90), description: bsClean(x.description, 420), inspiration: bsClean(x.inspiration, 100), state: 'new' })).filter(x => x.title && x.description) : [], seen: c ? c.seen.filter(x => typeof x === 'string') : [], at: c ? c.at : 0, loading: false, error: '' };
   }
   bsDraw();
   if (!S.bs.items.some(x => x.state === 'new') && !S.bs.loading && !S.bs.error && !S.bs.fetchedOnce) { S.bs.fetchedOnce = true; bsFetch(); }

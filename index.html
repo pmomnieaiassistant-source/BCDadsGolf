@@ -260,7 +260,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.5.1';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -433,7 +433,7 @@ function shell(r, inner, { thread = null } = {}) {
     : `<h1>BC Dads Golf</h1>`;
   app.innerHTML = `<header class="top">${left}
     <div class="seg"><button data-go="#/use" class="${r.mode === 'use' ? 'on' : ''}">Use</button>
-    <button data-go="#/create/ideas" class="${r.mode === 'create' ? 'on' : ''}">Create</button></div></header>
+    <button data-go="#/create/ideas" class="${r.mode === 'create' ? 'on' : ''}">Build</button></div></header>
     <main>${storageOk() ? '' : `<div class="card err">${esc(NO_STORAGE)}</div>`}${inner}
     ${thread ? '' : `<p class="foot">BC Dads Golf v${APP_VERSION}</p>`}</main>
     ${thread ? composerHTML(thread) : r.mode === 'create' ? `<nav class="tabs">
@@ -446,8 +446,8 @@ async function render() {
   const r = route();
   if (r.mode === 'use') {
     return shell(r, `<div class="use"><div class="flag">${icon('flag', 34)}</div><h2>Scoring is coming</h2>
-      <p class="muted">Nothing to use yet. Head to Create to share ideas for how our golf scoring should work.</p>
-      <button class="btn" data-go="#/create/ideas" style="margin-top:8px">Go to Create</button></div>`);
+      <p class="muted">Nothing to use yet. Head to Build to share ideas for how our golf scoring should work.</p>
+      <button class="btn" data-go="#/create/ideas" style="margin-top:8px">Go to Build</button></div>`);
   }
   if (r.tab === 'features') return renderFeatures(r);
   if (r.id) return renderThread(r.id);

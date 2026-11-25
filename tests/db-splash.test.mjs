@@ -25,6 +25,7 @@ test('the guide says how ideas become features, and names nobody', { skip }, asy
   assert.match(text, /talks an idea through/i); assert.match(text, /build queue/i); assert.match(text, /Claude builds it/i); assert.match(text, /Features tab/i);
   assert.equal(pages.length, 5);
   assert.equal(pages.at(-1).title, 'From idea to feature');
+  assert.match(pages[0].body, /Build is where we decide/); assert.ok(!/\bCreate\b/.test(text), 'the toggle says Build now, so the guide must too');
 });
 
 test('members can read the screens; people who are not members or not signed in cannot', { skip }, async () => {

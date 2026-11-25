@@ -1,5 +1,5 @@
 -- BC Dads Golf: splash screens (the "how the app works" guide, and future "what's new" screens).
--- Re-runnable. Deletes nothing. Built from the idea "Splash screen".
+-- Re-runnable. Deletes nothing. Built from the idea "Splash screen" (the idea is moved to Built, and listed as a feature, by the agent door).
 --
 -- To add a "what's new" screen later, add a row to public.splashes (kind 'whatsnew') in a new migration.
 -- Members who joined before it was added see it once per launch until they tick "Don't show again".
@@ -52,24 +52,3 @@ insert into public.splashes (id, kind, title, pages) values (
     {"icon": "star",    "title": "Ideas become features","body": "Paul picks which ideas get built. A built idea shows up on the Features tab, with a link back to the conversation that shaped it."}
   ]'::jsonb
 ) on conflict (id) do nothing;
-
--- Mark the idea itself as built, and add it to the Features page.
--- Only acts if there is exactly one idea titled "Splash screen" that is in Building status.
-do $$
-declare v_id uuid;
-begin
-  if (select count(*) from public.ideas where title = 'Splash screen' and status = 'building') = 1 then
-    select id into v_id from public.ideas where title = 'Splash screen' and status = 'building';
-    update public.ideas set status = 'built', built_version = '0.5.0', built_at = now() where id = v_id;
-    insert into public.features (idea_id, name, description, version)
-    select v_id, 'Splash screen',
-           'A short how-it-works guide that opens when you launch the app. Swipe through the pages, close it, or tick "Don''t show again". New "what''s new" screens use the same system, so they show up for everyone the same way.',
-           '0.5.0'
-    where not exists (select 1 from public.features where idea_id = v_id);
-  end if;
-end $$;
-
--- The overview at the top of the Features page: everything the app can do now.
-update public.overview set updated_at = now(), body =
-  'BC Dads Golf is where our group designs a golf scoring app together. Today you can post ideas with photos and polls, like and comment on them, and reply to each other with simple swipes. An assistant summarizes each idea and asks the questions that still need an answer. Friends can be invited with a link. A short guide explains how it all works when you open the app. The scoring itself will land on the Use side as ideas get built.'
-where id = 1;

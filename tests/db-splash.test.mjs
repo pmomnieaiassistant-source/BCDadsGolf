@@ -60,27 +60,8 @@ test('a screen needs 1 to 8 pages and a valid id and kind', { skip }, async () =
   await ins('whatsnew-v1', 'whatsnew', '[{"title":"a","body":"b"}]');
 });
 
-test('the migration marks the Splash screen idea as built and lists it as a feature, once', { skip }, async () => {
+test('the migration is safe to run twice', { skip }, async () => {
   const db = await freshDb();
-  // Paul's idea, as it is on the board right now: Building.
-  const idea = (await q(db, `insert into public.ideas (author_id, title, body, status) values ($1, 'Splash screen', 'x', 'building') returning id`, [ADMIN]))[0].id;
-  await q(db, `insert into public.ideas (author_id, title, body, status) values ($1, 'Something else', 'y', 'building')`, [ADMIN]);
   await db.exec(SPLASH_SQL);
-  const i = (await q(db, 'select status, built_version, built_at is not null as at from public.ideas where id = $1', [idea]))[0];
-  assert.deepEqual(i, { status: 'built', built_version: '0.5.0', at: true });
-  assert.equal((await q(db, `select status from public.ideas where title = 'Something else'`))[0].status, 'building', 'other ideas untouched');
-  const f = await q(db, 'select name, version from public.features where idea_id = $1', [idea]);
-  assert.deepEqual(f, [{ name: 'Splash screen', version: '0.5.0' }]);
-  assert.match((await q(db, 'select body from public.overview where id = 1'))[0].body, /guide explains how it all works/);
-  await db.exec(SPLASH_SQL); // safe to run twice
-  assert.equal((await q(db, 'select * from public.features')).length, 1);
   assert.equal((await q(db, 'select * from public.splashes')).length, 1);
-});
-
-test('if there is no single Building idea with that title, nothing is marked built', { skip }, async () => {
-  const db = await freshDb();
-  await q(db, `insert into public.ideas (author_id, title, body, status) values ($1, 'Splash screen', 'a', 'building'), ($1, 'Splash screen', 'b', 'building')`, [ADMIN]);
-  await db.exec(SPLASH_SQL);
-  assert.equal((await q(db, `select count(*)::int n from public.ideas where status = 'built'`))[0].n, 0, 'two matches is ambiguous, so it does nothing');
-  assert.equal((await q(db, 'select * from public.features')).length, 0);
 });

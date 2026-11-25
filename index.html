@@ -152,6 +152,7 @@ nav.tabs button.on{color:var(--green)}
 .ai-head b{color:var(--ai-ink);font-size:14px}
 .ai-card ul{margin:6px 0 0;padding-left:20px}
 .ai-card li{margin:3px 0}
+.ai-card ul.qa{list-style:none;padding-left:0}.ai-card .qa li{margin:0 0 6px;overflow-wrap:anywhere}.ai-card .qa b{font-weight:700}
 .label{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--ai-ink);margin-top:10px}
 .ai-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:14px}
 .linkbtn{display:inline-flex;align-items:center;gap:5px;color:var(--ai-ink);font-weight:700}
@@ -269,7 +270,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.10';
+const APP_VERSION = '0.5.12';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -664,6 +665,8 @@ function threadHTML(id) {
   const pics = cid => atts.filter(x => (x.comment_id || null) === cid).map(x => x.path);
   const canEdit = o => o === uid() || S.me.is_admin;
   const questions = Array.isArray(idea.open_questions) ? idea.open_questions : [];
+  // The questions the group has settled, as the assistant recorded them: short question and answer pairs, shown in the summary.
+  const answered = (Array.isArray(idea.answered_qa) ? idea.answered_qa : []).filter(x => x && typeof x.question === 'string' && typeof x.answer === 'string');
   const pending = aiPending.has(id);
 
   const post = `<article class="post full">
@@ -686,6 +689,7 @@ function threadHTML(id) {
   const ai = `<div class="ai-card"><div class="ai-head">${avatar('', 26, true)}<b>Assistant summary</b><span class="spacer"></span>
       ${idea.ai_updated_at ? `<span class="muted sm">${ago(idea.ai_updated_at)}</span>` : ''}</div>
     ${idea.summary ? `<div style="white-space:pre-wrap">${esc(idea.summary)}</div>` : `<div class="muted">The assistant hasn't summarized this idea yet.</div>`}
+    ${answered.length ? `<div class="label">Answered so far</div><ul class="qa">${answered.map(x => `<li><b>${esc(x.question)}</b> ${esc(x.answer)}</li>`).join('')}</ul>` : ''}
     ${questions.length && idea.status !== 'built' ? `<div class="label">Still to answer</div><ul>${questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}
     ${idea.status === 'built' ? '' : `<div class="ai-foot">${pending ? `<span class="reading"><span class="dots"><i></i><i></i><i></i></span>Reading the discussion</span>`
       : `<button class="linkbtn" data-act="ai-refresh">${icon('refresh', 15)}Refresh summary</button>`}

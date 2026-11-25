@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handle, sameKey } from '../supabase/functions/agent-board/handler.ts';
-import { parseRequest, checkTransition, shapeListItem, shapeThread, NOTICE, CAPS } from '../supabase/functions/agent-board/logic.ts';
+import { parseRequest, checkTransition, shapeListItem, shapeThread, shapeAnswered, NOTICE, CAPS } from '../supabase/functions/agent-board/logic.ts';
 
 const KEY = 'k'.repeat(24) + 'Z9'.repeat(8); // 40 characters
 const I = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -212,4 +212,11 @@ test('shaping caps lengths and counts', () => {
   assert.equal(t.title.length, 140); assert.equal(t.body.length, CAPS.body); assert.equal(t.spec.length, CAPS.spec); assert.equal(t.author, 'ab');
   assert.equal(t.comments.length, CAPS.comments); assert.equal(t.comments_total, 300); assert.equal(t.comments[0].text.length, CAPS.comment); assert.equal(t.photos.length, 20);
   assert.equal(shapeListItem(idea, { comments: 0, people: 0, likes: 0 }).body.length, CAPS.listBody);
+});
+
+test('the answered questions come back with an idea, cleaned and capped', () => {
+  assert.deepEqual(shapeAnswered([{ question: 'Season?', answer: 'Calendar year.' }, { question: 1 }, 'x', null, { question: 'q'.repeat(999), answer: 'a'.repeat(999) }]).map((x) => [x.question.length, x.answer.length]), [[7, 14], [200, 300]]);
+  assert.deepEqual(shapeAnswered(undefined), []); assert.deepEqual(shapeAnswered('junk'), []);
+  assert.equal(shapeAnswered(Array.from({ length: 50 }, () => ({ question: 'q', answer: 'a' }))).length, 30);
+  assert.match(NOTICE, /answer/);
 });

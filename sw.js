@@ -1,6 +1,6 @@
 // BC Dads Golf service worker: opens the app instantly from the phone's copy, and picks up new versions on the next open.
 // Bump VERSION with every change (together with APP_VERSION in index.html).
-const VERSION = 'bdg-v0.5.5';
+const VERSION = 'bdg-v0.5.6';
 const SHELL = ['./', 'index.html', 'config.js', 'vendor/supabase.js'];
 
 // cache: 'reload' skips the browser's own HTTP cache (GitHub Pages keeps files ~10 minutes), so a new version never saves an old page.

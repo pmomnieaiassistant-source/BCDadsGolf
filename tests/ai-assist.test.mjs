@@ -219,3 +219,83 @@ test('blueprint: handler sends it to Claude and says so; a failed or missing blu
     assert.equal(res.status, 200); assert.equal(o.blueprint, false); assert.ok(!seen.includes('<app_blueprint>')); assert.equal(m.calls.saved.length, 1);
   }
 });
+
+// ---------- logging and the self-test
+const SECRET_WORD = 'zebra-password-123';
+const KEY = 'k'.repeat(40);
+const collect = () => { const lines = []; return { lines, log: (event, data) => lines.push(JSON.stringify({ event, ...data })) }; };
+
+test('logging: records what happened with ids, counts and safe reasons, and never member text or keys', async () => {
+  const c = collect();
+  const m = make({ log: c.log, model: 'test-model', loadBlueprint: async () => 'blueprint text', loadBundle: async () => bundle({ idea: { title: `Title ${SECRET_WORD}`, body: `Body ${SECRET_WORD}` }, comments: [cm({ body: `Comment ${SECRET_WORD}` })] }) });
+  await handle(req({ idea_id: ID }), m.deps);
+  const events = c.lines.map((l) => JSON.parse(l).event);
+  assert.deepEqual(events, ['run_start', 'claude_ok', 'saved']);
+  assert.equal(JSON.parse(c.lines[0]).blueprint_chars, 'blueprint text'.length);
+  assert.ok(!c.lines.join('\n').includes(SECRET_WORD), 'no member text in the log');
+  // failures say why, in the log only
+  const f = collect();
+  const bad = make({ log: f.log, callClaude: async () => { throw new Error('claude 401 authentication_error'); } });
+  const res = await handle(req({ idea_id: ID }), bad.deps);
+  assert.equal(res.status, 502);
+  assert.ok(!(await res.text()).includes('401'), 'the member sees a plain message');
+  const err = f.lines.map((l) => JSON.parse(l)).find((l) => l.event === 'claude_error');
+  assert.equal(err.reason, 'claude 401 authentication_error');
+  const t = collect();
+  const slow = make({ log: t.log, callClaude: async () => { const e = new Error('The signal has been aborted'); e.name = 'AbortError'; throw e; } });
+  await handle(req({ idea_id: ID }), slow.deps);
+  assert.equal(JSON.parse(t.lines.find((l) => l.includes('claude_error'))).reason, 'timeout');
+});
+
+const stReq = (key, extra = {}) => new Request('http://x/', { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { 'x-agent-key': key } : {}) }, body: JSON.stringify({ action: 'selftest', ...extra }) });
+const claudeSays = (summary, questions = ['Which format?']) => async () => ({ input: { summary, open_questions: questions, new_questions: [], ready: false, spec: null }, inputTokens: 500, outputTokens: 80 });
+
+test('self-test: shut without the key, and a member cannot reach it', async () => {
+  for (const [serverKey, given] of [[undefined, KEY], ['', KEY], ['short', 'short'], [KEY, ''], [KEY, 'x'.repeat(40)]]) {
+    const m = make({ agentKey: serverKey });
+    const res = await handle(stReq(given), m.deps);
+    assert.ok([401, 503].includes(res.status), `status ${res.status} for ${serverKey}/${given}`);
+    assert.equal(m.calls.claude, 0, 'Claude is never called without the key');
+  }
+  // a member's token is not the key
+  const m = make({ agentKey: KEY });
+  const res = await handle(new Request('http://x/', { method: 'POST', headers: { authorization: 'Bearer good', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'selftest' }) }), m.deps);
+  assert.equal(res.status, 401); assert.equal(m.calls.claude, 0);
+});
+
+test('self-test: with the key it runs both made-up ideas through the real prompt and reports plainly', async () => {
+  const prompts = [];
+  const m = make({ agentKey: KEY, model: 'test-model', loadBlueprint: async () => '# BC Dads Golf: blueprint\nThe guide exists.', callClaude: async (s, u, t) => { prompts.push(u); return claudeSays('This already exists as the launch guide.')(); } });
+  const res = await handle(stReq(KEY), m.deps); const out = await res.json();
+  assert.equal(res.status, 200); assert.equal(out.ok, true); assert.equal(out.model, 'test-model');
+  assert.equal(out.blueprint.loaded, true); assert.equal(out.blueprint.first_line, '# BC Dads Golf: blueprint');
+  assert.equal(out.scenarios.length, 2); assert.equal(out.scenarios[0].says_it_exists, true);
+  assert.ok(prompts.every((p) => p.includes('<app_blueprint>') && p.includes('<member_content>')), 'it uses the real prompt, blueprint included');
+  assert.equal(m.calls.saved.length, 0); assert.equal(m.calls.runs.length, 0, 'nothing is saved or counted');
+  assert.ok(!JSON.stringify(out).includes(KEY), 'the key never comes back');
+});
+
+test('self-test: says exactly what is broken, and never throws', async () => {
+  const noClaude = make({ agentKey: KEY, loadBlueprint: async () => 'bp', callClaude: async () => { throw new Error('claude 401 authentication_error'); } });
+  let out = await (await handle(stReq(KEY), noClaude.deps)).json();
+  assert.equal(out.ok, false); assert.equal(out.scenarios.length, 1, 'stops after the first failure');
+  assert.equal(out.scenarios[0].error, 'claude 401 authentication_error');
+  assert.equal(out.checks[0].ok, false);
+  const noBp = make({ agentKey: KEY, loadBlueprint: async () => null, callClaude: claudeSays('A summary.') });
+  out = await (await handle(stReq(KEY), noBp.deps)).json();
+  assert.equal(out.ok, false); assert.equal(out.checks[2].ok, false); assert.equal(out.checks[0].ok, true);
+  const junk = make({ agentKey: KEY, loadBlueprint: async () => 'bp', callClaude: async () => ({ input: { nonsense: 1 }, inputTokens: 1, outputTokens: 1 }) });
+  out = await (await handle(stReq(KEY), junk.deps)).json();
+  assert.equal(out.checks[1].ok, false);
+  const throwsBp = make({ agentKey: KEY, loadBlueprint: async () => { throw new Error('x'); }, callClaude: claudeSays('A summary.') });
+  assert.equal((await handle(stReq(KEY), throwsBp.deps)).status, 200);
+});
+
+test('self-test: limited to one run every 20 seconds', async () => {
+  let t = NOW.getTime();
+  const m = make({ agentKey: KEY, now: () => new Date(t), loadBlueprint: async () => 'bp', callClaude: claudeSays('A summary.') });
+  assert.equal((await handle(stReq(KEY), m.deps)).status, 200);
+  assert.equal((await handle(stReq(KEY), m.deps)).status, 429);
+  t += 21_000;
+  assert.equal((await handle(stReq(KEY), m.deps)).status, 200);
+});

@@ -54,6 +54,13 @@ Code: `supabase/functions/ai-assist/` (`logic.ts` pure rules and prompt, `handle
 - Limits (cost control): 90 s per idea, 30 runs per member per hour, 300 per day overall. Admins refreshing skip the cooldown.
 - The model defaults to `claude-haiku-5-5` (set `AI_MODEL` in Supabase to change it).
 - Deploying it uses the `Deploy AI function` workflow, with the same rule as database changes: dry runs are fine, but never deploy until Paul has approved in the chat. The API key lives in the GitHub secret `ANTHROPIC_API_KEY`; never ask for it, print it, or write it in a file.
+- **Logging:** the function writes one JSON line per step to the Supabase function log (`run_start`, `claude_ok`, `claude_error`, `bad_answer`, `saved`, ...). Only ids, counts, timings and short safe reasons go in it: never member text, never a key. Members only ever see a plain message; the reason stays in the log.
+- **Self-test:** you cannot sign in as a member, so check the real pipeline (Anthropic key, model, answer shape, blueprint from GitHub) with this. It uses made-up ideas, saves nothing, costs two tiny Claude calls, and is limited to one run every 20 seconds. The secret key is added automatically (the same one as the agent door); never print it.
+  ```
+  curl -s -X POST https://qwamevditxxxnlndyfih.supabase.co/functions/v1/ai-assist \
+    -H 'content-type: application/json' -d '{"action":"selftest"}'
+  ```
+  Run it after every deploy of the assistant and tell Paul what it says. Never loosen its key check, and never make it read or write member data.
 
 ## The app blueprint (what the assistant knows about the app)
 

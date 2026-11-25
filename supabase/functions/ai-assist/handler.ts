@@ -11,6 +11,7 @@ export type Deps = {
   getUserId: (token: string) => Promise<string | null>;
   getMember: (userId: string) => Promise<{ isAdmin: boolean } | null>;
   loadBundle: (ideaId: string) => Promise<Bundle | null>;
+  loadBlueprint?: () => Promise<string | null>; // the app blueprint from GitHub; never required, a failure just means no blueprint this time
   latestHumanCommentAt: (ideaId: string) => Promise<string | null>;
   usage: (ideaId: string, memberId: string, sinceHour: string, sinceDay: string) => Promise<{ ideaLast: string | null; memberHour: number; dayTotal: number }>;
   recordRun: (row: { idea_id: string; member_id: string; ok: boolean | null; input_tokens: number | null; output_tokens: number | null }) => Promise<string | null>;
@@ -74,7 +75,8 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
 
   // 4. Claim the run first (so two quick requests do not both spend), then ask Claude.
   const runId = await deps.recordRun({ idea_id: ideaId, member_id: userId, ok: null, input_tokens: null, output_tokens: null });
-  const prompt = buildPrompt(bundle);
+  const blueprint = deps.loadBlueprint ? await deps.loadBlueprint().catch(() => null) : null;
+  const prompt = buildPrompt(bundle, blueprint);
   let result;
   try {
     result = await deps.callClaude(prompt.system, prompt.user, prompt.tool);
@@ -97,5 +99,5 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     return json(500, { error: 'Could not save the assistant\'s update.' });
   }
   await deps.finishRun(runId, true, result.inputTokens, result.outputTokens).catch(() => {});
-  return json(200, { ok: true, status: (plan.ideaPatch.status as string) || bundle.idea.status, asked: plan.newComments.length, ready: analysis.ready });
+  return json(200, { ok: true, status: (plan.ideaPatch.status as string) || bundle.idea.status, asked: plan.newComments.length, ready: analysis.ready, blueprint: !!blueprint });
 }

@@ -11,12 +11,15 @@ export type SelfTestDeps = {
   model?: string;
   now: () => Date;
   loadBlueprint?: () => Promise<string | null>;
-  callClaude: (system: string, user: string, tool: unknown, model?: string) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null }>;
+  advisor?: string | null;
+  callClaude: (system: string, user: string, tool: unknown, model?: string, advisor?: string | null) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null; advisorCalls?: number; advisorErrors?: string[]; fellBack?: boolean; fallbackReason?: string | null }>;
 };
 
 export const SELFTEST_GAP_MS = 20_000;
 // The self-test can try either of these, so the models can be compared on the same made-up ideas before switching.
 export const SELFTEST_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5'];
+// The advisor can be tried the same way: a model, or "off" for none. Only models that make sense as an advisor.
+export const SELFTEST_ADVISORS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'off'];
 const lastRun = new WeakMap<object, number>();
 
 // Compare keys without leaking, through timing, how much of the key was right: hash both and compare every byte.
@@ -64,7 +67,7 @@ const reasonOf = (e: unknown): string => {
   return (e instanceof Error ? e.message : String(e)).replace(/[^\x20-\x7E]/g, '').slice(0, 240);
 };
 
-export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { model?: unknown } = {}): Promise<Response> {
+export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { model?: unknown; advisor?: unknown } = {}): Promise<Response> {
   // The door stays shut unless a long enough key is set on the server and the caller has it.
   if (!deps.agentKey || deps.agentKey.length < 32) return out(503, { error: 'Self-test is not set up.' });
   const given = req.headers.get('x-agent-key') || '';
@@ -76,6 +79,14 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { m
     if (typeof body.model !== 'string' || !SELFTEST_MODELS.includes(body.model)) return out(400, { error: 'Unknown model.', allowed: SELFTEST_MODELS });
     model = body.model;
   }
+
+  // Optional: try a specific advisor, or none, instead of the live setting.
+  let advisorOverride: string | null | undefined;
+  if (body.advisor !== undefined) {
+    if (typeof body.advisor !== 'string' || !SELFTEST_ADVISORS.includes(body.advisor)) return out(400, { error: 'Unknown advisor.', allowed: SELFTEST_ADVISORS });
+    advisorOverride = body.advisor === 'off' ? null : body.advisor;
+  }
+  const advisorUsed = advisorOverride === undefined ? deps.advisor ?? null : advisorOverride;
 
   const now = deps.now().getTime();
   const prev = lastRun.get(deps);
@@ -89,12 +100,13 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { m
     const prompt = buildPrompt(s.bundle, blueprint);
     const t0 = Date.now();
     try {
-      const r = await deps.callClaude(prompt.system, prompt.user, prompt.tool, model);
+      const r = await deps.callClaude(prompt.system, prompt.user, prompt.tool, model, advisorOverride);
       const a = validateAnalysis(r.input, { existing: [], participants: 2 });
       if (!a) shapeOk = false;
       const text = a ? `${a.summary} ${a.open_questions.join(' ')} ${a.new_questions.join(' ')}` : '';
       scenarios.push({
         name: s.name, ok: !!a, ms: Date.now() - t0, input_tokens: r.inputTokens, output_tokens: r.outputTokens,
+        advisor_calls: r.advisorCalls ?? 0, advisor_errors: r.advisorErrors ?? [], fell_back: r.fellBack ?? false, fallback_reason: r.fallbackReason ?? null,
         says_it_exists: /\balready\b|\bexists?\b|\bcurrently\b|\bexisting\b/i.test(text), expected_it_exists: s.expectsExisting,
         summary: a?.summary ?? null, questions: a ? [...a.open_questions, ...a.new_questions] : [], answered: a?.answered ?? null,
       });
@@ -104,17 +116,20 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { m
       break; // the same failure would just repeat
     }
   }
+  const fellBack = (scenarios as { fell_back?: boolean }[]).some((s) => s.fell_back);
   const third = scenarios[2] as { answered?: { question: string; answer: string }[] | null } | undefined;
   const checks = [
     { name: 'Claude answers (key, model and network are fine)', ok: reachable },
     { name: 'the answer has the right shape and passes the app checks', ok: reachable && shapeOk },
     { name: 'the blueprint loads from GitHub', ok: !!blueprint },
     { name: 'a clearly answered question is recorded as a short question and answer', ok: !!third && Array.isArray(third.answered) && third.answered.length > 0 },
+    { name: 'the advisor way works (or there is no advisor): no fallback to the plain way', ok: !advisorUsed || (reachable && !fellBack) },
   ];
   return out(200, {
     ok: checks.every((c) => c.ok),
     model: model ?? deps.model ?? null,
-    tried_override: !!model,
+    tried_override: !!model || advisorOverride !== undefined,
+    advisor: advisorUsed,
     blueprint: { loaded: !!blueprint, chars: blueprint ? blueprint.length : 0, first_line: blueprint ? blueprint.split('\n')[0].slice(0, 80) : null },
     checks, scenarios,
   });

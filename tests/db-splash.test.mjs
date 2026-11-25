@@ -77,12 +77,3 @@ test('the migration is safe to run twice', { skip }, async () => {
   await db.exec(SPLASH_SQL);
   assert.equal((await q(db, `select * from public.splashes where id = 'howto-v1'`)).length, 1);
 });
-
-test("the Ready to build what's-new screen is there, for everyone, and says nothing about Paul", { skip }, async () => {
-  const db = await freshDb();
-  const [s] = await as(db, DAD, () => q(db, `select * from public.splashes where id = 'whatsnew-0-5-3'`));
-  assert.equal(s.kind, 'whatsnew'); assert.equal(s.active, true); assert.equal(s.pages.length, 2);
-  assert.ok(!/Paul/.test(JSON.stringify(s.pages)));
-  const again = await q(db, `select count(*)::int n from public.splashes where id = 'whatsnew-0-5-3'`);
-  assert.equal(again[0].n, 1);
-});

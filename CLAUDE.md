@@ -59,10 +59,10 @@ Code: `supabase/functions/ai-assist/` (`logic.ts` pure rules and prompt, `handle
 The app opens with a splash screen: a short, swipeable guide with a close button and a "Don't show this again" checkbox. The screens live in the database (`public.splashes`, plus `public.splash_hidden` for each member's choice), so a new "what's new" screen is just a new row, shipped in a migration. The how-it-works guide is `howto-v1`.
 
 - Every screen shows on every launch until the member ticks "Don't show this again" for that screen. **Every new screen goes to everyone** (new members too), and hiding one never hides another. The how-it-works guide shows first, then newer screens, newest first.
-- **When you ship a change, decide whether it deserves a what's-new screen.** Add one when people will notice something new they can use or that behaves differently: a new feature, screen or button, or a familiar thing that now works another way. Skip bug fixes, spacing or color tweaks, speed or reliability work, changes to the assistant's behind-the-scenes rules, and anything only Paul sees.
+- **Never add a what's-new screen on your own.** Only when Paul tells you to, in a session. Shipping a feature does not mean a screen; do not suggest or add one unless he asks.
 - To add one: a new migration that inserts a row into `public.splashes`: `id` like `whatsnew-0-6-0` (lowercase letters, digits, hyphens), `kind` `'whatsnew'`, a short `title`, and 1 to 3 `pages` of `{"icon", "title", "body"}` in plain words, with no emoji and no markup (it is shown as plain text). `icon` is one of the names in `ICONS` in `index.html`; an unknown one falls back to a sparkle.
 - To retire an old one, set `active = false` in a migration. Never edit or delete a screen members have already seen.
-- Tell Paul in your reply when you added one, and what it says.
+- When Paul does ask for one, tell him in your reply what it says.
 
 ## Reading and moving ideas (the agent door)
 

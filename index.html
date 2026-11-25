@@ -160,6 +160,10 @@ nav.tabs button.on{color:var(--green)}
 .dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
 @keyframes dot{0%,80%,100%{opacity:.25}40%{opacity:1}}
 .spec{background:var(--card);border-left:4px solid var(--gold)}
+.srcnote{margin:0 0 6px;font-size:13px;color:var(--muted)}.srcnote .linkbtn{font-size:13px;text-align:left}
+.spunlink{display:block;margin-top:4px;font-size:13px}
+.spquote{margin:0 0 10px;padding:8px 12px;border-left:3px solid var(--line, #d8ddd6);color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+.spin-check{display:flex;align-items:center;gap:10px;margin:10px 0;font-size:15px}.spin-check input{width:20px;height:20px}
 .readybar{display:flex;align-items:center;gap:12px;justify-content:space-between}.readybar>div{min-width:0}.readybar .btn,.readybar .linkbtn{flex:none;white-space:nowrap}.readybar.ready{border-left:4px solid var(--gold)}.readybar.building{border-left:4px solid #22498c}
 .admin{display:flex;align-items:center;gap:10px}
 .admin select{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
@@ -261,7 +265,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.3';
+const APP_VERSION = '0.5.4';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -645,12 +649,15 @@ async function loadThread(id) {
   }
   let readyName = null;
   if (iq.data?.ready_by) { const m = await sb.from('members').select('name').eq('id', iq.data.ready_by).maybeSingle(); readyName = m.data?.name || null; }
-  S.threads[id] = { idea: iq.data, atts: aq.data, polls: pq.data, comments: cq.data, readyName };
+  let source = null;
+  if (iq.data?.source_idea_id) { const si = await sb.from('ideas').select('id,title,status').eq('id', iq.data.source_idea_id).maybeSingle(); source = si.data || null; }
+  S.threads[id] = { idea: iq.data, atts: aq.data, polls: pq.data, comments: cq.data, readyName, source };
 }
 function threadHTML(id) {
   const t = S.threads[id];
   if (!t) return threadSkeleton();
-  const { idea, atts, polls, comments, readyName } = t;
+  const { idea, atts, polls, comments, readyName, source } = t;
+  const spinOk = comments.length > 0 && 'spun_idea_id' in comments[0]; // false until the database has the spin-off update
   if (!idea) return `<div class="empty"><p>That idea was not found. It may have been deleted.</p><button class="btn" data-go="${backHash()}">Go back</button></div>`;
   const pics = cid => atts.filter(x => (x.comment_id || null) === cid).map(x => x.path);
   const canEdit = o => o === uid() || S.me.is_admin;
@@ -660,6 +667,7 @@ function threadHTML(id) {
   const post = `<article class="post full">
     <div class="p-head">${avatar(idea.author?.name)}<div class="p-who"><b>${esc(idea.author?.name || 'Someone')}</b><span>${ago(idea.created_at)} · ${chip(idea.status)}</span></div>
       ${canEdit(idea.author_id) ? `<button data-act="del-idea" class="muted" aria-label="Delete idea">${icon('trash', 18)}</button>` : ''}</div>
+    ${source ? `<p class="srcnote">Started from a discussion on <button class="linkbtn" data-go="${source.status === 'built' ? '#/create/features/' : '#/create/ideas/'}${esc(source.id)}">${esc(source.title)}</button></p>` : ''}
     <div data-dbl="idea:${id}"><h3 class="p-title" style="font-size:20px">${esc(idea.title)}</h3>
     ${idea.body ? `<p class="p-body">${esc(idea.body)}</p>` : ''}</div>
     ${photosHTML(pics(null), true)}
@@ -693,8 +701,8 @@ function threadHTML(id) {
       <span class="sw r">${icon('reply', 22)}</span>${mine ? `<span class="sw l">${icon('trash', 22)}</span>` : ''}
       <div class="c-main">${avatar(nameOf(c), reply ? 28 : 34, c.is_ai)}<div class="c-col">
         <div class="bubble ${c.is_ai ? 'ai' : ''}" data-dbl="comment:${c.id}"><b>${esc(nameOf(c))}</b>${isQ ? '<span class="tag">QUESTION</span>' : ''}
-          <div class="c-text">${esc(c.body)}</div>${photosHTML(pics(c.id), true)}${commentLikeBadge(c.id)}</div>
-        <div class="c-meta"><span>${ago(c.created_at)}</span>${likeAct('comment', c.id)}<button data-reply="${c.id}">${isQ ? 'Answer' : 'Reply'}</button></div>
+          <div class="c-text">${esc(c.body)}</div>${c.spun_idea_id ? `<button class="linkbtn spunlink" data-go="#/create/ideas/${esc(c.spun_idea_id)}">Open the new idea</button>` : ''}${photosHTML(pics(c.id), true)}${commentLikeBadge(c.id)}</div>
+        <div class="c-meta"><span>${ago(c.created_at)}</span>${likeAct('comment', c.id)}<button data-reply="${c.id}">${isQ ? 'Answer' : 'Reply'}</button>${spinOk && !c.spun_idea_id ? `<button data-spin="${c.id}">New idea</button>` : ''}</div>
       </div></div></div>`;
   };
   const tops = comments.filter(c => !c.parent_id);
@@ -895,6 +903,35 @@ function pollSheet(id) {
   };
 }
 
+// ---------- start a new idea from a comment (and its replies)
+function spinSheet(cid) {
+  const id = route().id, t = S.threads[id]; if (!t) return;
+  const c = t.comments.find(x => x.id === cid); if (!c) return;
+  const kids = new Set([cid]); let grew = true;
+  while (grew) { grew = false; for (const x of t.comments) if (x.parent_id && kids.has(x.parent_id) && !kids.has(x.id)) { kids.add(x.id); grew = true; } }
+  const nReplies = kids.size - 1;
+  const first = c.body.replace(/\s+/g, ' ').trim();
+  const guess = first.length > 60 ? first.slice(0, 57).replace(/\s+\S*$/, '') + '...' : first;
+  const { el, close } = sheet(`<div class="sh-head"><button class="cancel" data-x>Cancel</button><h2>New idea</h2><button class="btn" id="spgo">Start</button></div>
+    <p class="muted sm" style="margin-top:0">This starts a new idea from ${nReplies ? 'this comment and its replies' : 'this comment'}. The original conversation stays where it is, with a link to the new idea.</p>
+    <blockquote class="spquote">${esc(first.length > 160 ? first.slice(0, 157) + '...' : first)}</blockquote>
+    <input class="field title" id="spt" maxlength="140" placeholder="Give the new idea a title" autocomplete="off" value="${esc(guess)}">
+    ${nReplies ? `<label class="spin-check"><input type="checkbox" id="spr" checked><span>Include the ${nReplies} repl${nReplies === 1 ? 'y' : 'ies'}</span></label>` : ''}
+    <p class="err" id="spe"></p>`);
+  $('[data-x]', el).onclick = close; setTimeout(() => { const i = $('#spt', el); i.focus(); i.select(); }, 260);
+  $('#spgo', el).onclick = async ev => {
+    const title = $('#spt', el).value.trim();
+    if (title.length < 3) return $('#spe', el).textContent = 'Give it a title of at least 3 letters.';
+    const b = ev.target; b.disabled = true; b.dataset.busy = '1';
+    try {
+      const { data, error } = await sb.rpc('spin_off', { p_comment_id: cid, p_title: title, p_include_replies: nReplies ? $('#spr', el).checked : false });
+      if (error) throw error;
+      S.feed = null; close(); toast('New idea started'); go('#/create/ideas/' + data);
+    } catch (e) { $('#spe', el).textContent = e.message || 'Something went wrong. Try again.'; b.disabled = false; }
+    finally { delete b.dataset.busy; }
+  };
+}
+
 // ---------- invite links (admins)
 const inviteUrl = tok => `${location.origin}${location.pathname}#/join/${tok}`;
 function inviteSheet() {
@@ -1090,7 +1127,7 @@ const ACT = {
 document.addEventListener('click', e => {
   if (G_swipedEl && Date.now() - G_swipedAt < 350 && G_swipedEl.contains(e.target)) return; // that was the end of a swipe, not a tap
   if (!e.target.closest('.menu,[data-act="sort-menu"]')) closeSortMenu();
-  const a = e.target.closest('[data-go],[data-act],[data-like],[data-vote],[data-reply],[data-more],[data-delpoll],[data-sort],[data-lb],[data-stop],[data-open]');
+  const a = e.target.closest('[data-go],[data-act],[data-like],[data-vote],[data-reply],[data-spin],[data-more],[data-delpoll],[data-sort],[data-lb],[data-stop],[data-open]');
   if (!a) return;
   const d = a.dataset;
   if (d.go) return go(d.go);
@@ -1110,6 +1147,7 @@ document.addEventListener('click', e => {
     S.sort = d.sort; try { localStorage.setItem('bdg.sort', d.sort); } catch (_) {}
     const f = $('#feed'); if (f) f.innerHTML = feedHTML(); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
   }
+  if (d.spin) return spinSheet(d.spin);
   if (d.lb) return lightbox(d.lb);
   if (d.act) return ACT[d.act] && ACT[d.act](a, e);
   if ('stop' in d) return; // taps inside a poll card do not open the idea

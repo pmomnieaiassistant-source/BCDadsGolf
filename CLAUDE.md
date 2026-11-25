@@ -82,6 +82,13 @@ curl -s -X POST https://qwamevditxxxnlndyfih.supabase.co/functions/v1/agent-boar
 - Tests: `node --test tests/agent-board.test.mjs` (the door) and the database side in `tests/db-agent.test.mjs`. Never weaken the key check or the allowed moves in `logic.ts`.
 - Deploying it uses the `Deploy AI function` workflow with the same rule as the assistant: never deploy until Paul has approved in the chat. The key lives in the GitHub secret `AGENT_KEY`.
 
+## Spin-off (a comment becomes its own idea)
+
+Any member can tap **New idea** on a comment (on an idea or on a feature) to start a new standalone idea from it, with its replies (and up to 6 photos) if they choose. The new idea is an ordinary Open idea written by that member; its body quotes the discussion with the real authors. The two link to each other: the new idea shows "Started from a discussion on ...", and the original thread gets a note with a link.
+
+- All of it is in `supabase/migrations/20261125080000_spin_off.sql` (`spin_off`, `comments_guard`, columns `source_idea_id`, `source_comment_id`, `spun_idea_id`). The links and the note can only be made by `spin_off`; members cannot fake them. Limit: 10 per member per hour. Nothing is ever deleted by it.
+- Tested on real Postgres: `tests/db-spin.test.mjs`.
+
 ## Invite links
 
 Admins make invite links in the app (Invite button in the feed). A link is `#/join/<secret>`: the secret sits after the `#` so it is never sent to a server, it is kept in memory only, and the app wipes it from the address bar once used. Links expire (1 to 30 days) and have a use limit; admins can cancel them. The permanent group code still works.

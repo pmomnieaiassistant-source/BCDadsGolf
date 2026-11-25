@@ -36,7 +36,7 @@ const json = (status: number, body: unknown): Response =>
 export function safeReason(e: unknown): string {
   const name = e instanceof Error ? e.name : '';
   if (name === 'AbortError' || name === 'TimeoutError') return 'timeout';
-  return (e instanceof Error ? e.message : String(e)).replace(/[^\x20-\x7E]/g, '').slice(0, 120);
+  return (e instanceof Error ? e.message : String(e)).replace(/[^\x20-\x7E]/g, '').slice(0, 220);
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

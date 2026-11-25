@@ -430,3 +430,15 @@ test('members cannot pick a model: a request with a model field still uses the l
   const res = await handle(req({ idea_id: ID, model: 'claude-opus-5-5' }), m.deps);
   assert.equal(res.status, 200); assert.deepEqual(seen, [undefined]);
 });
+
+test('failures: the real reason from Anthropic reaches the log and the self-test, never the member', async () => {
+  const reason = 'claude 400 invalid_request_error: tool_choice is not supported with this model';
+  const c = collect();
+  const m = make({ log: c.log, callClaude: async () => { throw new Error(reason); } });
+  const res = await handle(req({ idea_id: ID }), m.deps);
+  assert.equal(res.status, 502); assert.ok(!(await res.text()).includes('tool_choice'));
+  assert.equal(c.lines.map((l) => JSON.parse(l)).find((l) => l.event === 'claude_error').reason, reason);
+  const st = make({ agentKey: KEY, loadBlueprint: async () => 'bp', callClaude: async () => { throw new Error(reason); } });
+  const out = await (await handle(stReq(KEY), st.deps)).json();
+  assert.equal(out.scenarios[0].error, reason);
+});

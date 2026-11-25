@@ -11,7 +11,7 @@ const env = (k: string, d = ''): string => Deno.env.get(k) ?? d;
 const num = (k: string, d: number): number => { const n = Number(env(k)); return Number.isFinite(n) && n > 0 ? n : d; };
 
 const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false, autoRefreshToken: false } });
-const MODEL = env('AI_MODEL', 'claude-sonnet-5-5');
+const MODEL = env('AI_MODEL', 'claude-haiku-5-5'); // Haiku is the proven default; try Sonnet with the self-test's model option first
 const loadBlueprint = makeBlueprintLoader((url, init) => fetch(url, init), () => Date.now());
 
 const deps: Deps = {
@@ -104,9 +104,13 @@ const deps: Deps = {
       });
       if (!res.ok) {
         // The kind of problem Anthropic reports (for example authentication_error or not_found_error): enough to fix it, never the key.
-        let kind = '';
-        try { const e = await res.json(); kind = String(e?.error?.type ?? '').replace(/[^a-z_]/g, '').slice(0, 40); } catch (_) { /* no body */ }
-        throw new Error('claude ' + res.status + (kind ? ' ' + kind : ''));
+        let kind = '', detail = '';
+        try {
+          const e = await res.json();
+          kind = String(e?.error?.type ?? '').replace(/[^a-z_]/g, '').slice(0, 40);
+          detail = String(e?.error?.message ?? '').replace(/[^\x20-\x7E]/g, '').slice(0, 160); // what Anthropic objected to; it describes the request's shape, never a key
+        } catch (_) { /* no body */ }
+        throw new Error('claude ' + res.status + (kind ? ' ' + kind : '') + (detail ? ': ' + detail : ''));
       }
       const out = await res.json();
       // deno-lint-ignore no-explicit-any

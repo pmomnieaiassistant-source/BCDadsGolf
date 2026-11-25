@@ -61,7 +61,7 @@ const SCENARIOS: { name: string; expectsExisting: boolean; bundle: Bundle }[] = 
 const reasonOf = (e: unknown): string => {
   const name = e instanceof Error ? e.name : '';
   if (name === 'AbortError' || name === 'TimeoutError') return 'timeout';
-  return (e instanceof Error ? e.message : String(e)).replace(/[^\x20-\x7E]/g, '').slice(0, 160);
+  return (e instanceof Error ? e.message : String(e)).replace(/[^\x20-\x7E]/g, '').slice(0, 240);
 };
 
 export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { model?: unknown } = {}): Promise<Response> {

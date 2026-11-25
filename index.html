@@ -73,10 +73,11 @@ nav.tabs button.on{color:var(--green)}
 .menu .mh{font-size:12px;font-weight:700;color:var(--muted);padding:6px 12px 4px}
 .menu button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:11px 12px;border-radius:10px;font-weight:600;font-size:15px;text-align:left}
 .menu button:active{background:var(--soft)}
-.sp-bg{position:fixed;inset:0;z-index:80;background:rgba(8,14,10,.58);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:grid;place-items:center;padding:20px;opacity:0;transition:opacity .25s}
+.sp-bg{position:fixed;inset:0;z-index:80;background:rgba(8,14,10,.58);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;transition:opacity .25s}
 .sp-bg.in{opacity:1}
-.sp-card{position:relative;background:var(--card);border-radius:26px;width:100%;max-width:380px;padding:28px 22px 20px;box-shadow:0 24px 60px rgba(0,0,0,.35);transform:translateY(14px) scale(.97);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+.sp-card{position:relative;background:var(--card);border-radius:26px;width:100%;max-width:380px;min-width:0;padding:28px 22px 20px;box-shadow:0 24px 60px rgba(0,0,0,.35);transform:translateY(14px) scale(.97);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
 .sp-bg.in .sp-card{transform:none}
+.sp-card:focus{outline:none}
 .sp-x{position:absolute;top:10px;right:10px;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
 .sp-x:active{background:var(--soft)}
 .sp-kind{text-align:center;font-size:12px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--green);margin:0 36px 6px}
@@ -965,7 +966,7 @@ function splashModal(sp, done) {
   const pages = sp.pages.slice(0, 8);
   let i = 0, closing = false;
   const bg = document.createElement('div'); bg.className = 'sp-bg';
-  bg.innerHTML = `<div class="sp-card" role="dialog" aria-modal="true" aria-label="${esc(sp.title)}">
+  bg.innerHTML = `<div class="sp-card" role="dialog" aria-modal="true" aria-label="${esc(sp.title)}" tabindex="-1">
     <button class="sp-x" data-sp="close" aria-label="Close">${icon('x', 22)}</button>
     <div class="sp-kind">${esc(sp.title)}</div>
     <div class="sp-viewport"><div class="sp-track">${pages.map(p => `<section class="sp-page">
@@ -983,7 +984,7 @@ function splashModal(sp, done) {
   };
   show(0);
   requestAnimationFrame(() => bg.classList.add('in'));
-  setTimeout(() => nextBtn.focus({ preventScroll: true }), 300);
+  setTimeout(() => $('.sp-card', bg).focus({ preventScroll: true }), 300); // focus the card, not a button, so no outline shows
 
   const close = async () => {
     if (closing) return; closing = true;

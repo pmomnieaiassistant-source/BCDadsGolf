@@ -25,15 +25,17 @@ test('the guide says how ideas become features, and names nobody', { skip }, asy
   assert.match(text, /talks an idea through/i); assert.match(text, /build queue/i); assert.match(text, /Claude builds it/i); assert.match(text, /Features tab/i);
   assert.equal(pages.length, 5);
   assert.equal(pages.at(-1).title, 'From idea to feature');
+  assert.match(pages[0].body, /Build is where we decide/); assert.ok(!/\bCreate\b/.test(text), 'the toggle says Build now, so the guide must too');
 });
 
 test('members can read the screens; people who are not members or not signed in cannot', { skip }, async () => {
   const db = await freshDb();
-  assert.equal((await as(db, DAD, () => q(db, 'select id from public.splashes'))).length, 1);
+  const guide = who => as(db, who, () => q(db, `select id from public.splashes where id = 'howto-v1'`));
+  assert.equal((await guide(DAD)).length, 1);
   assert.equal((await as(db, STRANGER, () => q(db, 'select id from public.splashes'))).length, 0, 'signed in but not a member: sees nothing');
   await fails(as(db, null, () => db.query('select * from public.splashes'), 'anon'), /permission denied/i);
   await db.query(`update public.splashes set active = false where id = 'howto-v1'`);
-  assert.equal((await as(db, DAD, () => q(db, 'select id from public.splashes'))).length, 0, 'switched-off screens are hidden');
+  assert.equal((await guide(DAD)).length, 0, 'switched-off screens are hidden');
 });
 
 test('nobody can change or add screens from the app, not even an admin', { skip }, async () => {
@@ -73,5 +75,5 @@ test('a screen needs 1 to 8 pages and a valid id and kind', { skip }, async () =
 test('the migration is safe to run twice', { skip }, async () => {
   const db = await freshDb();
   await db.exec(SPLASH_SQL);
-  assert.equal((await q(db, 'select * from public.splashes')).length, 1);
+  assert.equal((await q(db, `select * from public.splashes where id = 'howto-v1'`)).length, 1);
 });

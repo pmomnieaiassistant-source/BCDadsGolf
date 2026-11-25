@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --test *)",
+      "Bash(node --check *)",
+      "Bash(python3 -m http.server *)",
+      "Bash(node /tmp/claude-0/-home-user/*/scratchpad/*.js)"
+    ]
+  }
+}

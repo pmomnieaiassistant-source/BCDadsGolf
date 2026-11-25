@@ -1,6 +1,6 @@
 # BC Dads Golf
 
-A golf scoring app that the group designs in the open. **Create** is where ideas are posted and discussed; **Use** is the scoring app, which starts blank and grows as ideas get built. See `CLAUDE.md` for how ideas become features.
+A golf scoring app that the group designs in the open. **Build** is where ideas are posted and discussed; **Use** is the scoring app, which starts blank and grows as ideas get built. See `CLAUDE.md` for how ideas become features.
 
 ## One-time setup
 

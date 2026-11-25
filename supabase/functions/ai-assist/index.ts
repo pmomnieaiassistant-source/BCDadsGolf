@@ -6,6 +6,7 @@ import { handle } from './handler.ts';
 import type { Deps } from './handler.ts';
 import type { Bundle } from './logic.ts';
 import { makeBlueprintLoader } from './blueprint.ts';
+import { makeClaude } from './claude.ts';
 
 const env = (k: string, d = ''): string => Deno.env.get(k) ?? d;
 const num = (k: string, d: number): number => { const n = Number(env(k)); return Number.isFinite(n) && n > 0 ? n : d; };
@@ -13,6 +14,10 @@ const num = (k: string, d: number): number => { const n = Number(env(k)); return
 const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false, autoRefreshToken: false } });
 const MODEL = env('AI_MODEL', 'claude-haiku-5-5'); // Haiku is the proven default; try Sonnet with the self-test's model option first
 const loadBlueprint = makeBlueprintLoader((url, init) => fetch(url, init), () => Date.now());
+// The advisor: a stronger model the main one may consult once for strategic direction. 'off' (or empty) turns it off.
+const ADVISOR_RAW = env('AI_ADVISOR', 'claude-opus-5-5').trim();
+const ADVISOR: string | null = ['', 'off', 'none'].includes(ADVISOR_RAW.toLowerCase()) ? null : ADVISOR_RAW;
+const claude = makeClaude({ apiKey: () => env('ANTHROPIC_API_KEY'), model: MODEL, advisor: ADVISOR, fetchFn: (url, init) => fetch(url, init) });
 
 const deps: Deps = {
   limits: { cooldownSec: num('AI_COOLDOWN_SEC', 90), memberHourly: num('AI_MEMBER_HOURLY', 30), dailyCap: num('AI_DAILY_CAP', 300) },
@@ -20,6 +25,7 @@ const deps: Deps = {
   loadBlueprint,
   agentKey: env('AGENT_KEY'),
   model: MODEL,
+  advisor: ADVISOR,
   log: (event, data) => console.log(JSON.stringify({ fn: 'ai-assist', event, ...data })),
 
   async getUserId(token) {
@@ -43,10 +49,12 @@ const deps: Deps = {
     const { data: polls } = await db.from('polls')
       .select('question,poll_options(id,label),poll_votes(option_id,voter_id)')
       .eq('idea_id', ideaId).order('created_at', { ascending: true });
+    const { data: others } = await db.from('ideas').select('title,status').neq('id', ideaId).order('created_at', { ascending: false }).limit(40);
     // deno-lint-ignore no-explicit-any
     const nameOf = (a: any) => (Array.isArray(a) ? a[0]?.name : a?.name) || '';
     return {
       idea: { ...idea, author_name: nameOf(idea.author) },
+      board: (others || []).map((o: { title: string; status: string }) => ({ title: o.title, status: o.status })),
       // deno-lint-ignore no-explicit-any
       comments: (comments || []).map((c: any) => ({ ...c, author_name: nameOf(c.author) })),
       // deno-lint-ignore no-explicit-any
@@ -83,44 +91,7 @@ const deps: Deps = {
     await db.from('ai_runs').update({ ok, input_tokens: inputTokens, output_tokens: outputTokens }).eq('id', runId);
   },
 
-  async callClaude(system, user, tool, model) {
-    const key = env('ANTHROPIC_API_KEY');
-    if (!key) throw new Error('missing key');
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 45_000);
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        signal: ctl.signal,
-        headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({
-          model: model || MODEL,
-          max_tokens: 3200, // room for a long spec plus the answered Q&As; a reply cut off mid-way would be unusable
-          system,
-          messages: [{ role: 'user', content: user }],
-          tools: [tool],
-          tool_choice: { type: 'tool', name: 'record_analysis' },
-        }),
-      });
-      if (!res.ok) {
-        // The kind of problem Anthropic reports (for example authentication_error or not_found_error): enough to fix it, never the key.
-        let kind = '', detail = '';
-        try {
-          const e = await res.json();
-          kind = String(e?.error?.type ?? '').replace(/[^a-z_]/g, '').slice(0, 40);
-          detail = String(e?.error?.message ?? '').replace(/[^\x20-\x7E]/g, '').slice(0, 160); // what Anthropic objected to; it describes the request's shape, never a key
-        } catch (_) { /* no body */ }
-        throw new Error('claude ' + res.status + (kind ? ' ' + kind : '') + (detail ? ': ' + detail : ''));
-      }
-      const out = await res.json();
-      // deno-lint-ignore no-explicit-any
-      const block = (out.content || []).find((b: any) => b.type === 'tool_use');
-      if (!block) throw new Error('no tool call');
-      return { input: block.input, inputTokens: out.usage?.input_tokens ?? null, outputTokens: out.usage?.output_tokens ?? null };
-    } finally {
-      clearTimeout(timer);
-    }
-  },
+  callClaude: (system, user, tool, model, advisor) => claude(system, user, tool, model, advisor),
 
   async save(ideaId, plan) {
     // Comments first, then the idea's update, so the "last updated" time is after the questions it asked.

@@ -14,13 +14,14 @@ export type Deps = {
   loadBundle: (ideaId: string) => Promise<Bundle | null>;
   agentKey?: string; // the agent door's secret; only used to guard the self-test
   model?: string;
+  advisor?: string | null;
   log?: (event: string, data: Record<string, unknown>) => void; // ids, counts, timings and safe reasons only: never member text or keys
   loadBlueprint?: () => Promise<string | null>; // the app blueprint from GitHub; never required, a failure just means no blueprint this time
   latestHumanCommentAt: (ideaId: string) => Promise<string | null>;
   usage: (ideaId: string, memberId: string, sinceHour: string, sinceDay: string) => Promise<{ ideaLast: string | null; memberHour: number; dayTotal: number }>;
   recordRun: (row: { idea_id: string; member_id: string; ok: boolean | null; input_tokens: number | null; output_tokens: number | null }) => Promise<string | null>;
   finishRun: (runId: string | null, ok: boolean, inputTokens: number | null, outputTokens: number | null) => Promise<void>;
-  callClaude: (system: string, user: string, tool: unknown, model?: string) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null }>;
+  callClaude: (system: string, user: string, tool: unknown, model?: string, advisor?: string | null) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null; advisor?: string | null; advisorCalls?: number; advisorErrors?: string[]; fellBack?: boolean; fallbackReason?: string | null }>;
   save: (ideaId: string, plan: Plan) => Promise<void>;
 };
 
@@ -95,7 +96,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   const runId = await deps.recordRun({ idea_id: ideaId, member_id: userId, ok: null, input_tokens: null, output_tokens: null });
   const blueprint = deps.loadBlueprint ? await deps.loadBlueprint().catch(() => null) : null;
   const prompt = buildPrompt(bundle, blueprint);
-  log('run_start', { idea_id: ideaId, member_id: userId, force, comments: bundle.comments.length, blueprint_chars: blueprint ? blueprint.length : 0, model: deps.model ?? null });
+  log('run_start', { idea_id: ideaId, member_id: userId, force, comments: bundle.comments.length, blueprint_chars: blueprint ? blueprint.length : 0, board_ideas: (bundle.board || []).length, model: deps.model ?? null, advisor: deps.advisor ?? null });
   const t0 = deps.now().getTime();
   let result;
   try {
@@ -106,7 +107,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     await deps.finishRun(runId, false, null, null).catch(() => {});
     return json(502, { error: 'The assistant is not available right now. Try again in a minute.' }); // the reason goes to the log, never to the member
   }
-  log('claude_ok', { idea_id: ideaId, ms: deps.now().getTime() - t0, input_tokens: result.inputTokens, output_tokens: result.outputTokens });
+  log('claude_ok', { idea_id: ideaId, ms: deps.now().getTime() - t0, input_tokens: result.inputTokens, output_tokens: result.outputTokens, advisor_calls: result.advisorCalls ?? 0, advisor_errors: result.advisorErrors ?? [], fell_back: result.fellBack ?? false, fallback_reason: result.fallbackReason ?? null });
 
   // 5. Check what came back, then save only what we allow.
   const analysis = validateAnalysis(result.input, { existing: existingQuestions(bundle.idea, bundle.comments), participants: participantIds(bundle).length });

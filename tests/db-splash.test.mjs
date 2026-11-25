@@ -17,6 +17,16 @@ test('the how-it-works screen is seeded: five pages, plain text, only known icon
   for (const p of s.pages) { assert.ok(allowed.has(p.icon), p.icon); assert.ok(p.title && p.body); assert.ok(!/[<>]/.test(p.title + p.body), 'no markup'); }
 });
 
+test('the guide says how ideas become features, and names nobody', { skip }, async () => {
+  const db = await freshDb();
+  const pages = (await q(db, `select pages from public.splashes where id = 'howto-v1'`))[0].pages;
+  const text = pages.map(p => p.title + ' ' + p.body).join(' ');
+  assert.ok(!/paul/i.test(text), 'no one is named');
+  assert.match(text, /talks an idea through/i); assert.match(text, /build queue/i); assert.match(text, /Claude builds it/i); assert.match(text, /Features tab/i);
+  assert.equal(pages.length, 5);
+  assert.equal(pages.at(-1).title, 'From idea to feature');
+});
+
 test('members can read the screens; people who are not members or not signed in cannot', { skip }, async () => {
   const db = await freshDb();
   assert.equal((await as(db, DAD, () => q(db, 'select id from public.splashes'))).length, 1);

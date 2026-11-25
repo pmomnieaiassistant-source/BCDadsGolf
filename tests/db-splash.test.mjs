@@ -30,11 +30,12 @@ test('the guide says how ideas become features, and names nobody', { skip }, asy
 
 test('members can read the screens; people who are not members or not signed in cannot', { skip }, async () => {
   const db = await freshDb();
-  assert.equal((await as(db, DAD, () => q(db, 'select id from public.splashes'))).length, 1);
+  const guide = who => as(db, who, () => q(db, `select id from public.splashes where id = 'howto-v1'`));
+  assert.equal((await guide(DAD)).length, 1);
   assert.equal((await as(db, STRANGER, () => q(db, 'select id from public.splashes'))).length, 0, 'signed in but not a member: sees nothing');
   await fails(as(db, null, () => db.query('select * from public.splashes'), 'anon'), /permission denied/i);
   await db.query(`update public.splashes set active = false where id = 'howto-v1'`);
-  assert.equal((await as(db, DAD, () => q(db, 'select id from public.splashes'))).length, 0, 'switched-off screens are hidden');
+  assert.equal((await guide(DAD)).length, 0, 'switched-off screens are hidden');
 });
 
 test('nobody can change or add screens from the app, not even an admin', { skip }, async () => {
@@ -74,5 +75,14 @@ test('a screen needs 1 to 8 pages and a valid id and kind', { skip }, async () =
 test('the migration is safe to run twice', { skip }, async () => {
   const db = await freshDb();
   await db.exec(SPLASH_SQL);
-  assert.equal((await q(db, 'select * from public.splashes')).length, 1);
+  assert.equal((await q(db, `select * from public.splashes where id = 'howto-v1'`)).length, 1);
+});
+
+test("the Ready to build what's-new screen is there, for everyone, and says nothing about Paul", { skip }, async () => {
+  const db = await freshDb();
+  const [s] = await as(db, DAD, () => q(db, `select * from public.splashes where id = 'whatsnew-0-5-3'`));
+  assert.equal(s.kind, 'whatsnew'); assert.equal(s.active, true); assert.equal(s.pages.length, 2);
+  assert.ok(!/Paul/.test(JSON.stringify(s.pages)));
+  const again = await q(db, `select count(*)::int n from public.splashes where id = 'whatsnew-0-5-3'`);
+  assert.equal(again[0].n, 1);
 });

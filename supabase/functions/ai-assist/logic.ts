@@ -27,6 +27,7 @@ export type Idea = {
   open_questions: unknown;
   spec: string | null;
   ai_updated_at: string | null;
+  ready_by?: string | null; // set when a member marked it Ready to build
   author_id: string;
   author_name: string;
 };
@@ -187,7 +188,7 @@ export type Plan = {
   newComments: { idea_id: string; author_id: null; is_ai: true; kind: 'question'; body: string }[];
 };
 
-// What to save. The assistant can move an idea between Open and Ready. It never sets Building or Built; that is Paul's call.
+// What to save. The assistant can move an idea between Open and Ready, but never undoes a Ready that a member set. It never sets Building or Built; that is Paul's call.
 export function planWrites(idea: Idea, a: Analysis, nowIso: string): Plan {
   const patch: Record<string, unknown> = {
     summary: a.summary,
@@ -199,7 +200,7 @@ export function planWrites(idea: Idea, a: Analysis, nowIso: string): Plan {
     patch.spec = a.spec;
   } else if (idea.status === 'ready') {
     if (a.ready) patch.spec = a.spec;
-    else { patch.status = 'open'; patch.spec = null; }
+    else if (!idea.ready_by) { patch.status = 'open'; patch.spec = null; } // a member's Ready is theirs to take back, not the assistant's
   }
   return {
     ideaPatch: patch,

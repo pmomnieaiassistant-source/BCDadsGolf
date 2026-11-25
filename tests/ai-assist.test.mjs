@@ -173,3 +173,11 @@ test('author lookups name the author_id link (a bare members(...) is ambiguous s
     assert.ok(!/[:(,]\s*members\(/.test(src), `${f} has an ambiguous members(...) lookup`);
   }
 });
+
+test('the assistant never takes back a Ready that a member set', () => {
+  const notReady = { summary: 's', open_questions: ['q?'], new_questions: [], ready: false, spec: null };
+  const p = planWrites(idea({ status: 'ready', ready_by: 'member-1', spec: 'old spec' }), notReady, 'T').ideaPatch;
+  assert.equal('status' in p, false, 'status stays Ready');
+  assert.equal('spec' in p, false, 'the spec is left alone');
+  assert.equal(p.summary, 's', 'it still refreshes the summary');
+});

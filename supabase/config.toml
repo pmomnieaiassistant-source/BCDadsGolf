@@ -3,3 +3,7 @@ project_id = "bcdadsgolf"
 [functions.ai-assist]
 # The function checks the caller's sign-in and group membership itself (see handler.ts).
 verify_jwt = false
+
+[functions.agent-board]
+# The function checks its own secret key (see handler.ts); there is no signed-in user to check.
+verify_jwt = false

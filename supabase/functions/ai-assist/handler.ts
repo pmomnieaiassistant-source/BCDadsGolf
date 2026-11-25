@@ -20,7 +20,7 @@ export type Deps = {
   usage: (ideaId: string, memberId: string, sinceHour: string, sinceDay: string) => Promise<{ ideaLast: string | null; memberHour: number; dayTotal: number }>;
   recordRun: (row: { idea_id: string; member_id: string; ok: boolean | null; input_tokens: number | null; output_tokens: number | null }) => Promise<string | null>;
   finishRun: (runId: string | null, ok: boolean, inputTokens: number | null, outputTokens: number | null) => Promise<void>;
-  callClaude: (system: string, user: string, tool: unknown) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null }>;
+  callClaude: (system: string, user: string, tool: unknown, model?: string) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null }>;
   save: (ideaId: string, plan: Plan) => Promise<void>;
 };
 
@@ -47,10 +47,10 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
 
   const log = deps.log || (() => {});
   // The body is read once, up front, only so the self-test (key-protected, made-up data) can be told apart from a member's request.
-  let body: { idea_id?: unknown; force?: unknown; action?: unknown } = {};
+  let body: { idea_id?: unknown; force?: unknown; action?: unknown; model?: unknown } = {};
   let badBody = false;
   try { body = await req.json(); } catch (_) { badBody = true; }
-  if (body && body.action === 'selftest') return handleSelfTest(req, deps);
+  if (body && body.action === 'selftest') return handleSelfTest(req, deps, body);
 
   // 1. Who is asking? Must be a signed-in member of the group.
   const auth = req.headers.get('authorization') || '';

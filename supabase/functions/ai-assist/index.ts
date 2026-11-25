@@ -11,7 +11,7 @@ const env = (k: string, d = ''): string => Deno.env.get(k) ?? d;
 const num = (k: string, d: number): number => { const n = Number(env(k)); return Number.isFinite(n) && n > 0 ? n : d; };
 
 const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false, autoRefreshToken: false } });
-const MODEL = env('AI_MODEL', 'claude-haiku-5-5');
+const MODEL = env('AI_MODEL', 'claude-sonnet-5-5');
 const loadBlueprint = makeBlueprintLoader((url, init) => fetch(url, init), () => Date.now());
 
 const deps: Deps = {
@@ -83,7 +83,7 @@ const deps: Deps = {
     await db.from('ai_runs').update({ ok, input_tokens: inputTokens, output_tokens: outputTokens }).eq('id', runId);
   },
 
-  async callClaude(system, user, tool) {
+  async callClaude(system, user, tool, model) {
     const key = env('ANTHROPIC_API_KEY');
     if (!key) throw new Error('missing key');
     const ctl = new AbortController();
@@ -94,8 +94,8 @@ const deps: Deps = {
         signal: ctl.signal,
         headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 1800,
+          model: model || MODEL,
+          max_tokens: 3200, // room for a long spec plus the answered Q&As; a reply cut off mid-way would be unusable
           system,
           messages: [{ role: 'user', content: user }],
           tools: [tool],

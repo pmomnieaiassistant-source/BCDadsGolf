@@ -11,10 +11,12 @@ export type SelfTestDeps = {
   model?: string;
   now: () => Date;
   loadBlueprint?: () => Promise<string | null>;
-  callClaude: (system: string, user: string, tool: unknown) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null }>;
+  callClaude: (system: string, user: string, tool: unknown, model?: string) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null }>;
 };
 
 export const SELFTEST_GAP_MS = 20_000;
+// The self-test can try either of these, so the models can be compared on the same made-up ideas before switching.
+export const SELFTEST_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5'];
 const lastRun = new WeakMap<object, number>();
 
 // Compare keys without leaking, through timing, how much of the key was right: hash both and compare every byte.
@@ -62,11 +64,18 @@ const reasonOf = (e: unknown): string => {
   return (e instanceof Error ? e.message : String(e)).replace(/[^\x20-\x7E]/g, '').slice(0, 160);
 };
 
-export async function handleSelfTest(req: Request, deps: SelfTestDeps): Promise<Response> {
+export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { model?: unknown } = {}): Promise<Response> {
   // The door stays shut unless a long enough key is set on the server and the caller has it.
   if (!deps.agentKey || deps.agentKey.length < 32) return out(503, { error: 'Self-test is not set up.' });
   const given = req.headers.get('x-agent-key') || '';
   if (!given || !(await sameKey(given, deps.agentKey))) return out(401, { error: 'Not allowed.' });
+
+  // Optional: try a specific model instead of the live one. Only the two known models are allowed.
+  let model: string | undefined;
+  if (body.model !== undefined) {
+    if (typeof body.model !== 'string' || !SELFTEST_MODELS.includes(body.model)) return out(400, { error: 'Unknown model.', allowed: SELFTEST_MODELS });
+    model = body.model;
+  }
 
   const now = deps.now().getTime();
   const prev = lastRun.get(deps);
@@ -80,7 +89,7 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps): Promise<
     const prompt = buildPrompt(s.bundle, blueprint);
     const t0 = Date.now();
     try {
-      const r = await deps.callClaude(prompt.system, prompt.user, prompt.tool);
+      const r = await deps.callClaude(prompt.system, prompt.user, prompt.tool, model);
       const a = validateAnalysis(r.input, { existing: [], participants: 2 });
       if (!a) shapeOk = false;
       const text = a ? `${a.summary} ${a.open_questions.join(' ')} ${a.new_questions.join(' ')}` : '';
@@ -104,7 +113,8 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps): Promise<
   ];
   return out(200, {
     ok: checks.every((c) => c.ok),
-    model: deps.model ?? null,
+    model: model ?? deps.model ?? null,
+    tried_override: !!model,
     blueprint: { loaded: !!blueprint, chars: blueprint ? blueprint.length : 0, first_line: blueprint ? blueprint.split('\n')[0].slice(0, 80) : null },
     checks, scenarios,
   });

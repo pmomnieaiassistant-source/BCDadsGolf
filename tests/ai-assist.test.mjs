@@ -402,3 +402,31 @@ test('answered: the handler saves them with the summary', async () => {
   assert.equal((await handle(req({ idea_id: ID }), m.deps)).status, 200);
   assert.deepEqual(m.calls.saved[0].ideaPatch.answered_qa, [{ question: 'Format?', answer: 'Stableford.' }]);
 });
+
+// ---------- choosing the model
+test('self-test: can try a specific model, but only the two known ones, and reports which it used', async () => {
+  const seen = [];
+  const mk2 = () => make({ agentKey: KEY, model: 'claude-sonnet-5-5', loadBlueprint: async () => 'bp', callClaude: async (s, u, t, model) => { seen.push(model); const r = await claudeSays('A summary.')(); r.input.answered = [{ question: 'Q?', answer: 'A.' }]; return r; } });
+  // no override: the live model is used (undefined is passed, so index.ts falls back to its own default)
+  let m = mk2(); let out = await (await handle(stReq(KEY), m.deps)).json();
+  assert.equal(out.model, 'claude-sonnet-5-5'); assert.equal(out.tried_override, false); assert.deepEqual(new Set(seen), new Set([undefined]));
+  // override to the other model
+  seen.length = 0; m = mk2(); out = await (await handle(stReq(KEY, { model: 'claude-haiku-5-5' }), m.deps)).json();
+  assert.equal(out.model, 'claude-haiku-5-5'); assert.equal(out.tried_override, true); assert.deepEqual(new Set(seen), new Set(['claude-haiku-5-5']));
+  // anything else is refused before any money is spent
+  for (const bad of ['claude-opus-5-5', 'gpt-4', '', 42, null, { x: 1 }]) {
+    seen.length = 0; m = mk2();
+    const res = await handle(stReq(KEY, { model: bad }), m.deps);
+    assert.equal(res.status, 400, `model ${JSON.stringify(bad)}`); assert.deepEqual(seen, []); assert.equal(m.calls.claude, 0);
+    assert.deepEqual((await res.json()).allowed, ['claude-haiku-5-5', 'claude-sonnet-5-5']);
+  }
+  // the key is still needed, with or without a model
+  m = mk2(); assert.equal((await handle(stReq('x'.repeat(40), { model: 'claude-haiku-5-5' }), m.deps)).status, 401); assert.deepEqual(seen, []);
+});
+
+test('members cannot pick a model: a request with a model field still uses the live one', async () => {
+  const seen = [];
+  const m = make({ callClaude: async (s, u, t, model) => { seen.push(model); return { input: good, inputTokens: 1, outputTokens: 1 }; } });
+  const res = await handle(req({ idea_id: ID, model: 'claude-opus-5-5' }), m.deps);
+  assert.equal(res.status, 200); assert.deepEqual(seen, [undefined]);
+});

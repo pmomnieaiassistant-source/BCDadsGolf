@@ -260,7 +260,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.1';
+const APP_VERSION = '0.5.2';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -334,8 +334,10 @@ function toast(msg) {
 // ---------- routing: #/use, #/create/ideas, #/create/ideas/<id>, #/create/features
 function route() {
   const p = location.hash.replace(/^#\/?/, '').split('/');
-  return { mode: p[0] === 'create' ? 'create' : 'use', tab: p[1] === 'features' ? 'features' : 'ideas', id: p[0] === 'create' && p[1] === 'ideas' ? (p[2] || null) : null };
+  return { mode: p[0] === 'create' ? 'create' : 'use', tab: p[1] === 'features' ? 'features' : 'ideas', id: p[0] === 'create' && (p[1] === 'ideas' || p[1] === 'features') ? (p[2] || null) : null };
 }
+// Where "back" goes from a discussion: the tab it was opened from.
+function backHash() { return '#/create/' + (route().tab === 'features' ? 'features' : 'ideas'); }
 // Navigate and re-render directly, so buttons work even in viewers that do not fire hashchange.
 function go(h) {
   try { if (location.hash !== h) history.pushState(null, '', h); }
@@ -352,7 +354,7 @@ const NO_STORAGE = `This browser is blocking saved sign-ins, so you will be logg
 // ---------- the assistant (summaries and questions). Runs on the server; this just asks it and shows progress.
 const aiPending = new Set(), aiNote = {};
 async function askAI(ideaId, { manual = false, force = false } = {}) {
-  if (aiPending.has(ideaId)) return;
+  if (aiPending.has(ideaId) || S.threads[ideaId]?.idea?.status === 'built') return; // built ideas are finished: no more summaries
   aiPending.add(ideaId); delete aiNote[ideaId];
   if (route().id === ideaId) rerenderThread();
   try {
@@ -429,7 +431,7 @@ function joinScreen(msg, { code = false } = {}) {
 function shell(r, inner, { thread = null } = {}) {
   document.body.className = thread ? 'composing' : (r.mode === 'create' ? 'tabs' : '');
   const left = thread
-    ? `<button class="back" data-go="#/create/ideas" aria-label="Back to ideas">${icon('back', 26)}<span>Ideas</span></button>`
+    ? `<button class="back" data-go="${backHash()}" aria-label="Back">${icon('back', 26)}<span>${r.tab === 'features' ? 'Features' : 'Ideas'}</span></button>`
     : `<h1>BC Dads Golf</h1>`;
   app.innerHTML = `<header class="top">${left}
     <div class="seg"><button data-go="#/use" class="${r.mode === 'use' ? 'on' : ''}">Use</button>
@@ -449,8 +451,8 @@ async function render() {
       <p class="muted">Nothing to use yet. Head to Build to share ideas for how our golf scoring should work.</p>
       <button class="btn" data-go="#/create/ideas" style="margin-top:8px">Go to Build</button></div>`);
   }
-  if (r.tab === 'features') return renderFeatures(r);
   if (r.id) return renderThread(r.id);
+  if (r.tab === 'features') return renderFeatures(r);
   return renderFeed(r);
 }
 
@@ -537,7 +539,8 @@ async function vote(pollId, optionId) {
 
 // ---------- feed
 async function loadFeed() {
-  const iq = await sb.from('ideas').select('*, author:members!author_id(name)').order('created_at', { ascending: false }).limit(100);
+  // Built ideas live under Features now, so they are not in this feed.
+  const iq = await sb.from('ideas').select('*, author:members!author_id(name)').neq('status', 'built').order('created_at', { ascending: false }).limit(100);
   if (iq.error) throw iq.error;
   const ideas = iq.data, ids = ideas.map(i => i.id);
   let comments = [], atts = [], polls = [], likes = [];
@@ -566,7 +569,7 @@ function feedHTML() {
   const list = sortIdeas(S.feed || [], S.sort);
   return `<button class="prompt" data-act="new-idea">${avatar(S.me.name, 38)}<span class="ptext">What should the app do?</span>${icon('image', 22)}</button>
     <div class="feedbar">${S.me.is_admin ? `<button class="sortbtn" data-act="invite" style="margin-right:auto" aria-label="Invite someone">${icon('userplus', 18)}Invite</button>` : ''}<button class="sortbtn" data-act="sort-menu" aria-label="Sort posts" aria-haspopup="true">${esc(SORTS[S.sort])}${icon('menu', 18)}</button></div>
-    ${list.length ? list.map(postCard).join('') : `<div class="empty">${icon('ideas', 40)}<p>No ideas yet. Be the first to post one.</p></div>`}`;
+    ${list.length ? list.map(postCard).join('') : `<div class="empty">${icon('ideas', 40)}<p>No ideas here right now. Post one, or see what has been built on the Features tab.</p></div>`}`;
 }
 // New: newest first. Popular: likes and comments, fading as a post goes quiet (so fresh activity lifts it again).
 // Top all time: most liked, then most discussed.
@@ -645,7 +648,7 @@ function threadHTML(id) {
   const t = S.threads[id];
   if (!t) return threadSkeleton();
   const { idea, atts, polls, comments } = t;
-  if (!idea) return `<div class="empty"><p>That idea was not found. It may have been deleted.</p><button class="btn" data-go="#/create/ideas">Back to ideas</button></div>`;
+  if (!idea) return `<div class="empty"><p>That idea was not found. It may have been deleted.</p><button class="btn" data-go="${backHash()}">Go back</button></div>`;
   const pics = cid => atts.filter(x => (x.comment_id || null) === cid).map(x => x.path);
   const canEdit = o => o === uid() || S.me.is_admin;
   const questions = Array.isArray(idea.open_questions) ? idea.open_questions : [];
@@ -658,17 +661,17 @@ function threadHTML(id) {
     ${idea.body ? `<p class="p-body">${esc(idea.body)}</p>` : ''}</div>
     ${photosHTML(pics(null), true)}
     ${polls.map(pollHTML).join('')}
-    ${idea.status === 'built' ? `<p class="muted sm">Built${idea.built_version ? ' in version ' + esc(idea.built_version) : ''}. See it on the Features tab.</p>` : ''}
+    ${idea.status === 'built' ? `<p class="muted sm">Built${idea.built_version ? ' in version ' + esc(idea.built_version) : ''}. The conversation stays open, so you can keep commenting.</p>` : ''}
     <div class="p-actions">${likeAct('idea', id)}<button class="act" data-act="focus-composer">${icon('chat')}<span>${comments.length || ''}</span></button>
       <span class="spacer"></span><button class="act" data-act="new-poll">${icon('poll')}<span>Poll</span></button></div></article>`;
 
   const ai = `<div class="ai-card"><div class="ai-head">${avatar('', 26, true)}<b>Assistant summary</b><span class="spacer"></span>
       ${idea.ai_updated_at ? `<span class="muted sm">${ago(idea.ai_updated_at)}</span>` : ''}</div>
     ${idea.summary ? `<div style="white-space:pre-wrap">${esc(idea.summary)}</div>` : `<div class="muted">The assistant hasn't summarized this idea yet.</div>`}
-    ${questions.length ? `<div class="label">Still to answer</div><ul>${questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}
-    <div class="ai-foot">${pending ? `<span class="reading"><span class="dots"><i></i><i></i><i></i></span>Reading the discussion</span>`
+    ${questions.length && idea.status !== 'built' ? `<div class="label">Still to answer</div><ul>${questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}
+    ${idea.status === 'built' ? '' : `<div class="ai-foot">${pending ? `<span class="reading"><span class="dots"><i></i><i></i><i></i></span>Reading the discussion</span>`
       : `<button class="linkbtn" data-act="ai-refresh">${icon('refresh', 15)}Refresh summary</button>`}
-      ${aiNote[id] ? `<span class="muted">${esc(aiNote[id])}</span>` : ''}</div></div>`;
+      ${aiNote[id] ? `<span class="muted">${esc(aiNote[id])}</span>` : ''}</div>`}</div>`;
   const spec = idea.spec ? `<div class="card spec"><div class="label" style="color:var(--gold);margin:0 0 4px">What we would implement</div><div style="white-space:pre-wrap">${esc(idea.spec)}</div></div>` : '';
   const admin = S.me.is_admin ? `<div class="card admin"><b class="sm">Status</b><select id="status" aria-label="Status">
     ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>` : '';
@@ -1031,13 +1034,15 @@ async function renderFeatures(r) {
     ]);
     if (ov.error) throw ov.error; if (fs.error) throw fs.error;
     const body = ov.data?.body;
+    const counts = {}, ids = fs.data.map(f => f.idea_id).filter(Boolean);
+    if (ids.length) { const cq = await sb.from('comments').select('idea_id').in('idea_id', ids).limit(5000); if (!cq.error) for (const c of cq.data) counts[c.idea_id] = (counts[c.idea_id] || 0) + 1; }
     const fv = $('#fv'); if (!fv) return;
     fv.innerHTML = `<h2 style="margin:6px 4px 10px">What the app can do</h2>
       <div class="ai-card"><div class="ai-head">${avatar('', 26, true)}<b>Overview</b></div>
         ${body ? `<div style="white-space:pre-wrap">${esc(body)}</div>` : `<div class="muted">Nothing is built yet. When an idea is built it shows up here, with a link to the conversation that shaped it.</div>`}</div>
       ${fs.data.map(f => `<div class="f-card"><div class="p-head" style="margin:0 0 4px"><h3 style="flex:1">${esc(f.name)}</h3>${f.version ? `<span class="chip built">v${esc(f.version)}</span>` : ''}</div>
         <div style="white-space:pre-wrap;color:var(--ink2)">${esc(f.description)}</div>
-        ${f.idea_id ? `<button class="f-link" data-go="#/create/ideas/${f.idea_id}">See how this was decided ${icon('right', 16)}</button>` : ''}</div>`).join('')}`;
+        ${f.idea_id ? `<button class="f-link" data-go="#/create/features/${f.idea_id}">Open the discussion${counts[f.idea_id] ? ' · ' + counts[f.idea_id] + (counts[f.idea_id] === 1 ? ' comment' : ' comments') : ''} ${icon('right', 16)}</button>` : ''}</div>`).join('')}`;
   } catch (e) { toastFail(e); }
 }
 
@@ -1061,7 +1066,7 @@ const ACT = {
     if (!confirm('Delete this idea and everything in it?')) return;
     const { error } = await sb.from('ideas').delete().eq('id', route().id);
     if (error) return toastFail(error);
-    S.feed = null; go('#/create/ideas');
+    S.feed = null; go(backHash());
   },
 };
 document.addEventListener('click', e => {
@@ -1151,7 +1156,7 @@ document.addEventListener('touchend', e => {
   }
   if (g && g.type === 'edge') {
     const tv = $('#tv'); if (tv) { tv.style.transition = 'transform .2s, opacity .2s'; tv.style.transform = ''; tv.style.opacity = ''; }
-    if (g.lock === 'x' && g.dx > 90) { haptic(); go('#/create/ideas'); }
+    if (g.lock === 'x' && g.dx > 90) { haptic(); go(backHash()); }
   }
   if (g && g.type === 'pull') {
     const p = $('#ptr');

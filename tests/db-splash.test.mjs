@@ -1,0 +1,86 @@
+// Splash screen rules, tested on the real SQL. See _db.mjs for how to run these.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { skip, ADMIN, DAD, NEW1, STRANGER, freshDb, as, fails, q } from './_db.mjs';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const SPLASH_SQL = fs.readFileSync(path.join(here, '..', 'supabase', 'migrations', '20261125010000_splash.sql'), 'utf8');
+
+test('the how-it-works screen is seeded: five pages, plain text, only known icons', { skip }, async () => {
+  const db = await freshDb();
+  const s = (await q(db, `select * from public.splashes where id = 'howto-v1'`))[0];
+  assert.equal(s.kind, 'howto'); assert.equal(s.active, true); assert.equal(s.pages.length, 5);
+  const allowed = new Set(['flag', 'ideas', 'reply', 'sparkle', 'star', 'chat']);
+  for (const p of s.pages) { assert.ok(allowed.has(p.icon), p.icon); assert.ok(p.title && p.body); assert.ok(!/[<>]/.test(p.title + p.body), 'no markup'); }
+});
+
+test('members can read the screens; people who are not members or not signed in cannot', { skip }, async () => {
+  const db = await freshDb();
+  assert.equal((await as(db, DAD, () => q(db, 'select id from public.splashes'))).length, 1);
+  assert.equal((await as(db, STRANGER, () => q(db, 'select id from public.splashes'))).length, 0, 'signed in but not a member: sees nothing');
+  await fails(as(db, null, () => db.query('select * from public.splashes'), 'anon'), /permission denied/i);
+  await db.query(`update public.splashes set active = false where id = 'howto-v1'`);
+  assert.equal((await as(db, DAD, () => q(db, 'select id from public.splashes'))).length, 0, 'switched-off screens are hidden');
+});
+
+test('nobody can change or add screens from the app, not even an admin', { skip }, async () => {
+  const db = await freshDb();
+  for (const who of [DAD, ADMIN]) {
+    await fails(as(db, who, () => db.query(`insert into public.splashes (id, kind, title, pages) values ('evil-x', 'whatsnew', 'Hi', '[{"title":"a","body":"b"}]')`)), /permission denied/i);
+    await fails(as(db, who, () => db.query(`update public.splashes set title = 'changed'`)), /permission denied/i);
+    await fails(as(db, who, () => db.query(`delete from public.splashes`)), /permission denied/i);
+  }
+});
+
+test('"Don\'t show again" is per member: you can save, see and undo only your own', { skip }, async () => {
+  const db = await freshDb();
+  await as(db, DAD, () => db.query(`insert into public.splash_hidden (member_id, splash_id) values ($1, 'howto-v1')`, [DAD]));
+  assert.equal((await as(db, DAD, () => q(db, 'select * from public.splash_hidden'))).length, 1);
+  assert.equal((await as(db, ADMIN, () => q(db, 'select * from public.splash_hidden'))).length, 0, 'someone else sees nothing');
+  await fails(as(db, ADMIN, () => db.query(`insert into public.splash_hidden (member_id, splash_id) values ($1, 'howto-v1')`, [DAD])), /row-level security/i); // hide on someone else's behalf
+  await fails(as(db, DAD, () => db.query(`insert into public.splash_hidden (member_id, splash_id) values ($1, 'howto-v1')`, [DAD])), /duplicate key/i);  // twice
+  await as(db, ADMIN, () => db.query(`delete from public.splash_hidden`));
+  assert.equal((await q(db, 'select * from public.splash_hidden')).length, 1, "an admin cannot undo someone else's choice");
+  await as(db, DAD, () => db.query('delete from public.splash_hidden'));
+  assert.equal((await q(db, 'select * from public.splash_hidden')).length, 0, 'you can undo your own');
+  await fails(as(db, STRANGER, () => db.query(`insert into public.splash_hidden (member_id, splash_id) values ($1, 'howto-v1')`, [STRANGER])), /row-level security/i); // not a member
+});
+
+test('a screen needs 1 to 8 pages and a valid id and kind', { skip }, async () => {
+  const db = await freshDb();
+  const ins = (id, kind, pages) => db.query(`insert into public.splashes (id, kind, title, pages) values ($1, $2, 'T', $3::jsonb)`, [id, kind, pages]);
+  await fails(ins('ok-1', 'whatsnew', '[]'), /check/i);
+  await fails(ins('ok-2', 'whatsnew', JSON.stringify(Array(9).fill({ title: 'a', body: 'b' }))), /check/i);
+  await fails(ins('ok-3', 'whatsnew', '{"not":"a list"}'), /check/i);
+  await fails(ins('Bad Id!', 'whatsnew', '[{"title":"a","body":"b"}]'), /check/i);
+  await fails(ins('ok-4', 'surprise', '[{"title":"a","body":"b"}]'), /check/i);
+  await ins('whatsnew-v1', 'whatsnew', '[{"title":"a","body":"b"}]');
+});
+
+test('the migration marks the Splash screen idea as built and lists it as a feature, once', { skip }, async () => {
+  const db = await freshDb();
+  // Paul's idea, as it is on the board right now: Building.
+  const idea = (await q(db, `insert into public.ideas (author_id, title, body, status) values ($1, 'Splash screen', 'x', 'building') returning id`, [ADMIN]))[0].id;
+  await q(db, `insert into public.ideas (author_id, title, body, status) values ($1, 'Something else', 'y', 'building')`, [ADMIN]);
+  await db.exec(SPLASH_SQL);
+  const i = (await q(db, 'select status, built_version, built_at is not null as at from public.ideas where id = $1', [idea]))[0];
+  assert.deepEqual(i, { status: 'built', built_version: '0.5.0', at: true });
+  assert.equal((await q(db, `select status from public.ideas where title = 'Something else'`))[0].status, 'building', 'other ideas untouched');
+  const f = await q(db, 'select name, version from public.features where idea_id = $1', [idea]);
+  assert.deepEqual(f, [{ name: 'Splash screen', version: '0.5.0' }]);
+  assert.match((await q(db, 'select body from public.overview where id = 1'))[0].body, /guide explains how it all works/);
+  await db.exec(SPLASH_SQL); // safe to run twice
+  assert.equal((await q(db, 'select * from public.features')).length, 1);
+  assert.equal((await q(db, 'select * from public.splashes')).length, 1);
+});
+
+test('if there is no single Building idea with that title, nothing is marked built', { skip }, async () => {
+  const db = await freshDb();
+  await q(db, `insert into public.ideas (author_id, title, body, status) values ($1, 'Splash screen', 'a', 'building'), ($1, 'Splash screen', 'b', 'building')`, [ADMIN]);
+  await db.exec(SPLASH_SQL);
+  assert.equal((await q(db, `select count(*)::int n from public.ideas where status = 'built'`))[0].n, 0, 'two matches is ambiguous, so it does nothing');
+  assert.equal((await q(db, 'select * from public.features')).length, 0);
+});

@@ -1,7 +1,7 @@
 // Run with: node --test tests/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPrompt, validateAnalysis, planWrites, cleanIn, LIMITS } from '../supabase/functions/ai-assist/logic.ts';
+import { buildPrompt, validateAnalysis, planWrites, cleanIn, sameQuestion, LIMITS } from '../supabase/functions/ai-assist/logic.ts';
 import { handle } from '../supabase/functions/ai-assist/handler.ts';
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -298,4 +298,49 @@ test('self-test: limited to one run every 20 seconds', async () => {
   assert.equal((await handle(stReq(KEY), m.deps)).status, 429);
   t += 21_000;
   assert.equal((await handle(stReq(KEY), m.deps)).status, 200);
+});
+
+// ---------- repeated questions
+test('sameQuestion: catches clear rewordings, keeps different questions apart', () => {
+  const same = [
+    ['How are ties broken?', 'How should ties be broken?'],
+    ['Should the season be a calendar year?', 'Is the season a calendar year?'],
+    ['What happens with players who have fewer rounds?', 'What should happen with a player who has fewer rounds?'],
+    ['How are TIES broken??', 'how are ties broken'],
+    ['How are ties broken?', 'How should ties be broken in the standings?'], // one extra qualifier
+  ];
+  for (const [a, b] of same) assert.equal(sameQuestion(a, b), true, `${a} == ${b}`);
+  const different = [
+    ['How are ties broken?', 'How are handicaps calculated?'],
+    ['Should stableford points be shown per hole?', 'Should stableford points be shown per round?'], // one word apart, a different question
+    ['Who enters the scores?', 'Who can see the scores?'],
+    ['Should the season be a calendar year?', 'Should rounds from last season carry over?'],
+    ['How are ties broken?', 'How are ties broken between teams?'], // two extra words: a narrower question, kept
+    ['', 'Anything?'], ['Ties?', 'Handicaps?'],
+  ];
+  for (const [a, b] of different) assert.equal(sameQuestion(a, b), false, `${a} != ${b}`);
+});
+
+test('validateAnalysis: no question is listed twice, even reworded, and a new question never repeats an open one', () => {
+  const raw = {
+    summary: 'Summary.',
+    open_questions: ['How are ties broken?', 'How should ties be broken?', 'What defines the season?', 'Who enters the scores?'],
+    new_questions: ['How should ties be broken in the standings?', 'Who enters the scores?', 'What is the minimum number of rounds to qualify?'],
+    ready: false, spec: null,
+  };
+  const a = validateAnalysis(raw, { existing: [], participants: 2 });
+  assert.deepEqual(a.open_questions, ['How are ties broken?', 'What defines the season?', 'Who enters the scores?'], 'reworded repeats merge into the first');
+  assert.deepEqual(a.new_questions, ['What is the minimum number of rounds to qualify?'], 'new questions that repeat an open one are dropped');
+  // and ones already asked in the thread, reworded
+  const b = validateAnalysis({ ...raw, open_questions: [], new_questions: ['Is the season a calendar year?', 'How are handicaps applied?'] }, { existing: ['Should the season be a calendar year?'], participants: 2 });
+  assert.deepEqual(b.new_questions, ['How are handicaps applied?']);
+  // a repeat never uses up one of the three new-question slots
+  const c = validateAnalysis({ ...raw, open_questions: [], new_questions: ['Ties?? How are ties broken', 'Q1 about scoring format', 'Q2 about season length', 'Q3 about tie rules', 'Q4 about entry'] }, { existing: ['How are ties broken?'], participants: 2 });
+  assert.equal(c.new_questions.length, 3);
+});
+
+test('the instructions tell the model to merge overlapping questions and not ask what is answered', () => {
+  const sys = buildPrompt(bundle()).system;
+  assert.match(sys, /merge them into one/); assert.match(sys, /Never list the same question twice/);
+  assert.match(sys, /already on the open list/); assert.match(sys, /already answered/);
 });

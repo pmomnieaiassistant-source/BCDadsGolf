@@ -73,6 +73,25 @@ nav.tabs button.on{color:var(--green)}
 .menu .mh{font-size:12px;font-weight:700;color:var(--muted);padding:6px 12px 4px}
 .menu button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:11px 12px;border-radius:10px;font-weight:600;font-size:15px;text-align:left}
 .menu button:active{background:var(--soft)}
+.sp-bg{position:fixed;inset:0;z-index:80;background:rgba(8,14,10,.58);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:grid;place-items:center;padding:20px;opacity:0;transition:opacity .25s}
+.sp-bg.in{opacity:1}
+.sp-card{position:relative;background:var(--card);border-radius:26px;width:100%;max-width:380px;padding:28px 22px 20px;box-shadow:0 24px 60px rgba(0,0,0,.35);transform:translateY(14px) scale(.97);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+.sp-bg.in .sp-card{transform:none}
+.sp-x{position:absolute;top:10px;right:10px;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.sp-x:active{background:var(--soft)}
+.sp-kind{text-align:center;font-size:12px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--green);margin:0 36px 6px}
+.sp-viewport{overflow:hidden;touch-action:pan-y}
+.sp-track{display:flex;transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+.sp-page{flex:0 0 100%;min-width:0;text-align:center;padding:8px 6px 4px;min-height:230px}
+.sp-ic{width:68px;height:68px;border-radius:50%;background:var(--soft);color:var(--green);display:grid;place-items:center;margin:8px auto 14px}
+.sp-page h2{margin:0 0 8px;font-size:22px;line-height:1.25}
+.sp-page p{margin:0;font-size:16px;line-height:1.5;color:var(--ink2);white-space:pre-line}
+.sp-dots{display:flex;justify-content:center;gap:7px;margin:14px 0 12px}
+.sp-dots i{width:8px;height:8px;border-radius:50%;background:var(--line);transition:width .25s,background .25s}
+.sp-dots i.on{width:22px;border-radius:4px;background:var(--green)}
+.sp-check{display:flex;align-items:center;gap:10px;padding:10px 4px;font-size:15px;color:var(--ink2);cursor:pointer;user-select:none}
+.sp-check input{width:22px;height:22px;accent-color:var(--green);flex:none;margin:0}
+.sp-next{width:100%;padding:13px;font-size:16px;margin-top:4px}
 .lk{color:var(--green);font-weight:700;padding:6px 4px}.lk.muted{color:var(--muted)}
 .inv{display:flex;align-items:center;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
 .inv-t{flex:1;display:flex;flex-direction:column;line-height:1.3}
@@ -240,11 +259,11 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.5.0';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
-const S = { user: null, me: null, feed: null, sort: SORTS[savedSort] ? savedSort : 'popular', threads: {}, open: new Set(), replyTo: null, files: [], likesOn: true, feedScroll: 0 };
+const S = { user: null, me: null, feed: null, sort: SORTS[savedSort] ? savedSort : 'popular', threads: {}, open: new Set(), replyTo: null, files: [], likesOn: true, feedScroll: 0, splashChecked: false };
 const LK = { idea: new Map(), comment: new Map() };
 // An invite link looks like  #/join/<secret>. The secret sits after the # so it is never sent to any server.
 // It is kept in memory only, never saved, and wiped from the address bar as soon as it is used.
@@ -422,6 +441,7 @@ function shell(r, inner, { thread = null } = {}) {
 }
 
 async function render() {
+  if (S.me && !S.splashChecked) { S.splashChecked = true; maybeShowSplash(); }
   const r = route();
   if (r.mode === 'use') {
     return shell(r, `<div class="use"><div class="flag">${icon('flag', 34)}</div><h2>Scoring is coming</h2>
@@ -919,6 +939,87 @@ async function revokeInvite(tok) {
   toast('Link cancelled'); loadInvites();
 }
 
+// ---------- splash screens: the "how the app works" guide and later "what's new" screens
+// The screens live in the database (table splashes), so a new "what's new" screen is just a new row. Each member can tick
+// "Don't show again" per screen (table splash_hidden). A screen shows on every launch until its box is ticked.
+// Everyone sees every new screen, and hiding one never hides another.
+async function maybeShowSplash() {
+  try {
+    const [sq, hq] = await Promise.all([
+      sb.from('splashes').select('id,kind,title,pages,created_at').order('created_at', { ascending: false }),
+      sb.from('splash_hidden').select('splash_id'),
+    ]);
+    if (sq.error || hq.error) return; // before the database update there is simply no splash
+    const hidden = new Set((hq.data || []).map(r => r.splash_id));
+    const rank = x => (x.kind === 'howto' ? 0 : 1);
+    const queue = (sq.data || []).filter(x => !hidden.has(x.id) && Array.isArray(x.pages) && x.pages.length)
+      .sort((a, b) => rank(a) - rank(b) || String(b.created_at).localeCompare(String(a.created_at)));
+    showNextSplash(queue);
+  } catch (e) { console.warn('splash:', e.message); }
+}
+function showNextSplash(queue) {
+  const next = queue.shift();
+  if (next) splashModal(next, () => showNextSplash(queue));
+}
+function splashModal(sp, done) {
+  const pages = sp.pages.slice(0, 8);
+  let i = 0, closing = false;
+  const bg = document.createElement('div'); bg.className = 'sp-bg';
+  bg.innerHTML = `<div class="sp-card" role="dialog" aria-modal="true" aria-label="${esc(sp.title)}">
+    <button class="sp-x" data-sp="close" aria-label="Close">${icon('x', 22)}</button>
+    <div class="sp-kind">${esc(sp.title)}</div>
+    <div class="sp-viewport"><div class="sp-track">${pages.map(p => `<section class="sp-page">
+      <div class="sp-ic">${icon(ICONS[p.icon] ? p.icon : 'sparkle', 32)}</div><h2>${esc(p.title)}</h2><p>${esc(p.body)}</p></section>`).join('')}</div></div>
+    <div class="sp-dots">${pages.map(() => '<i></i>').join('')}</div>
+    <label class="sp-check"><input type="checkbox" id="sp-hide"><span>Don't show this again</span></label>
+    <button class="btn sp-next" data-sp="next"></button></div>`;
+  document.body.appendChild(bg);
+  const track = $('.sp-track', bg), dots = [...bg.querySelectorAll('.sp-dots i')], nextBtn = $('.sp-next', bg);
+  const show = n => {
+    i = Math.max(0, Math.min(pages.length - 1, n));
+    track.style.transform = `translateX(${-100 * i}%)`;
+    dots.forEach((d, k) => d.classList.toggle('on', k === i));
+    nextBtn.textContent = i === pages.length - 1 ? 'Done' : 'Next';
+  };
+  show(0);
+  requestAnimationFrame(() => bg.classList.add('in'));
+  setTimeout(() => nextBtn.focus({ preventScroll: true }), 300);
+
+  const close = async () => {
+    if (closing) return; closing = true;
+    document.removeEventListener('keydown', onKey);
+    if ($('#sp-hide', bg).checked) {
+      const { error } = await sb.from('splash_hidden').insert({ member_id: uid(), splash_id: sp.id });
+      if (error && error.code !== '23505') toast("Couldn't save that. It will show again next time.");
+    }
+    bg.classList.remove('in'); setTimeout(() => { bg.remove(); done(); }, 260);
+  };
+  const onKey = e => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowRight') show(i + 1); else if (e.key === 'ArrowLeft') show(i - 1); };
+  document.addEventListener('keydown', onKey);
+  bg.addEventListener('click', e => {
+    const a = e.target.closest('[data-sp]'); if (!a) return;
+    if (a.dataset.sp === 'close') close();
+    else if (i === pages.length - 1) close(); else show(i + 1);
+  });
+  // swipe the pages
+  let x0 = null, y0 = 0, dx = 0, locked = false;
+  const vp = $('.sp-viewport', bg);
+  vp.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; locked = false; track.style.transition = 'none'; }, { passive: true });
+  vp.addEventListener('touchmove', e => {
+    if (x0 == null) return;
+    dx = e.touches[0].clientX - x0;
+    if (!locked && Math.abs(e.touches[0].clientY - y0) > Math.abs(dx) + 6) { x0 = null; track.style.transition = ''; show(i); return; }
+    locked = true;
+    const resist = (i === 0 && dx > 0) || (i === pages.length - 1 && dx < 0) ? .3 : 1;
+    track.style.transform = `translateX(calc(${-100 * i}% + ${dx * resist}px))`;
+  }, { passive: true });
+  vp.addEventListener('touchend', () => {
+    if (x0 == null) return; track.style.transition = '';
+    if (dx < -50) show(i + 1); else if (dx > 50) show(i - 1); else show(i);
+    x0 = null;
+  });
+}
+
 // ---------- features
 async function renderFeatures(r) {
   shell(r, `<div id="fv">${feedSkeleton()}</div>`);
@@ -1015,7 +1116,7 @@ document.addEventListener('change', async e => {
 // Swipe in from the left edge on an idea: back to the feed. Pull down at the top of the feed: refresh.
 let G = null, G_swipedAt = 0, G_swipedEl = null, lastTap = { el: null, t: 0 };
 document.addEventListener('touchstart', e => {
-  if (e.touches.length !== 1 || e.target.closest('.sheet-bg,.lb,.composer,header')) { G = null; return; }
+  if (e.touches.length !== 1 || e.target.closest('.sheet-bg,.sp-bg,.lb,.composer,header')) { G = null; return; }
   const t = e.touches[0], r = route();
   G = { x0: t.clientX, y0: t.clientY, dx: 0, dy: 0, lock: null, moved: false, type: null };
   if (r.id && t.clientX < 28) G.type = 'edge';
@@ -1083,7 +1184,7 @@ document.addEventListener('dblclick', e => { // mouse: double-click to like
 const hadSW = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
 let swReg = null, updWait = 0, updLast = 0;
 function busy() {
-  if ($('.sheet-bg') || $('[data-busy]')) return true;
+  if ($('.sheet-bg') || $('.sp-bg') || $('[data-busy]')) return true;
   return [...document.querySelectorAll('textarea, input[type=text], input:not([type])')].some(el => el.value.trim());
 }
 function watchForUpdates() {

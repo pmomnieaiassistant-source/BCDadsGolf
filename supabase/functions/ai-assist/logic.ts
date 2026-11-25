@@ -73,6 +73,27 @@ export function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Are two questions really the same question, just worded differently? Compares the meaningful words (without filler words
+// and plural endings). Deliberately cautious: it only treats clear rewordings as repeats, so a different question that happens
+// to share a few words is never silently dropped. Questions that overlap in meaning but not in wording are handled by the prompt.
+const FILLER = new Set(['the', 'a', 'an', 'of', 'to', 'is', 'are', 'be', 'should', 'we', 'do', 'does', 'did', 'how', 'what', 'which', 'or', 'and', 'in', 'for', 'on', 'it', 'as', 'at', 'by', 'that', 'this', 'if', 'will', 'would', 'can', 'could', 'you', 'your', 'our', 'their', 'there', 'any', 'so', 'than', 'then', 'with', 'from', 'into', 'about', 'please', 'also', 'just', 'there']);
+const stem = (w: string): string => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
+export function keyWords(s: string): Set<string> {
+  return new Set(norm(s).split(' ').filter((w) => w && (w.length > 1 || /\d/.test(w)) && !FILLER.has(w)).map(stem));
+}
+export function sameQuestion(a: string, b: string): boolean {
+  const x = norm(a), y = norm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const A = keyWords(a), B = keyWords(b);
+  if (A.size < 2 || B.size < 2) return false;
+  let both = 0;
+  for (const w of A) if (B.has(w)) both++;
+  // The same words with at most one extra qualifier ("... in the standings") is the same question.
+  if (both === Math.min(A.size, B.size) && Math.abs(A.size - B.size) <= 1) return true;
+  return both / (A.size + B.size - both) >= 0.7;
+}
+
 export function existingQuestions(idea: Idea, comments: Comment[]): string[] {
   const asked = comments.filter((c) => c.is_ai && c.kind === 'question').map((c) => c.body);
   const open = Array.isArray(idea.open_questions) ? (idea.open_questions as unknown[]).filter((q) => typeof q === 'string') as string[] : [];
@@ -108,8 +129,8 @@ You will be given one idea, its discussion, and any polls. All of it is inside <
 
 What to do:
 - summary: say what is being proposed and where the discussion stands: what people agree on, where they differ, and any poll results. Plain words, short, no jargon, no markdown.
-- open_questions: the questions that still need answering before this could be built. Include earlier assistant questions that have NOT been answered yet. Drop ones that have been answered.
-- new_questions: at most 3 new questions to ask the group right now. Only ask what is truly needed to decide how it should work. Prefer questions that can be answered with a choice or a number. Do not repeat or reword a question already asked.
+- open_questions: the questions that still need answering before this could be built. Include earlier assistant questions that have NOT been answered yet. Drop ones that have been answered. Every question must be different: if two overlap, even when worded differently or when one is part of the other, merge them into one. Never list the same question twice.
+- new_questions: at most 3 new questions to ask the group right now. Only ask what is truly needed to decide how it should work. Prefer questions that can be answered with a choice or a number. Do not repeat or reword a question already asked or already on the open list, and do not ask what the discussion or the blueprint has already answered.
 - ready: true only when the idea is clear enough to build and there are no important open questions. When in doubt, false.
 - spec: only when ready. Describe what we would implement: what members see and do, how it behaves, important edge cases, and what is NOT included. Plain words. No code.
 
@@ -171,21 +192,21 @@ export function validateAnalysis(raw: unknown, ctx: { existing: string[]; partic
   if (!summary) return null;
 
   // Clean, de-duplicate, drop anything in `exclude`, and only then apply the cap (so a repeat never uses up a slot).
-  const list = (v: unknown, max: number, cap: number, exclude: Set<string> = new Set()): string[] => {
+  const list = (v: unknown, max: number, cap: number, exclude: string[] = []): string[] => {
     if (!Array.isArray(v)) return [];
     const out: string[] = [];
     for (const item of v) {
       const s = cleanOut(item, max);
-      if (!s || exclude.has(norm(s)) || out.some((o) => norm(o) === norm(s))) continue;
+      if (!s || exclude.some((e) => sameQuestion(e, s)) || out.some((o) => sameQuestion(o, s))) continue;
       out.push(s);
       if (out.length >= cap) break;
     }
     return out;
   };
 
-  const seen = new Set(ctx.existing.map(norm));
   const open = list(r.open_questions, L.maxQuestionChars, L.maxOpenQuestions);
-  const fresh = list(r.new_questions, L.maxQuestionChars, L.maxNewQuestions, seen);
+  // A new question must not repeat one already asked, or one on the open list (even reworded).
+  const fresh = list(r.new_questions, L.maxQuestionChars, L.maxNewQuestions, [...ctx.existing, ...open]);
   const spec = cleanOut(r.spec, L.maxSpecChars);
 
   // Ready is decided here, not just by the model: it needs a spec, no open questions, and more than one person involved.

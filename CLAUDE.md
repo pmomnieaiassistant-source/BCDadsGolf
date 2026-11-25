@@ -51,6 +51,7 @@ Code: `supabase/functions/ai-assist/` (`logic.ts` pure rules and prompt, `handle
 
 - It writes only: the idea's summary, open questions, spec, and its own question comments. It may move an idea between **Open** and **Ready**. It never sets Building or Built; that is Paul's call.
 - Member text only ever goes inside `<member_content>` tags as data. Its answer is forced through a fixed tool shape and re-checked in `validateAnalysis` before anything is saved. Keep it that way; never loosen these checks or put member text into the system prompt.
+- **Repeated questions:** `validateAnalysis` drops a question that repeats an earlier one, an open one, or one already asked in the thread, using `sameQuestion` (meaningful-word overlap; deliberately cautious so a different question is never silently dropped). Overlap in meaning but not in wording is the prompt's job ("merge overlapping questions"). Check it with the self-test after a deploy.
 - Limits (cost control): 90 s per idea, 30 runs per member per hour, 300 per day overall. Admins refreshing skip the cooldown.
 - The model defaults to `claude-haiku-5-5` (set `AI_MODEL` in Supabase to change it).
 - Deploying it uses the `Deploy AI function` workflow, with the same rule as database changes: dry runs are fine, but never deploy until Paul has approved in the chat. The API key lives in the GitHub secret `ANTHROPIC_API_KEY`; never ask for it, print it, or write it in a file.

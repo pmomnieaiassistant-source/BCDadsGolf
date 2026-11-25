@@ -1,6 +1,6 @@
 // The request handler for the AI assistant. All outside connections (sign-in check, database, Claude) come in
 // through `deps`, so every path can be tested without the network.
-import { buildPrompt, existingQuestions, participantIds, planWrites, validateAnalysis } from './logic.ts';
+import { BRAINSTORM_ADVISOR_GUIDE, BRAINSTORM_WEB_GUIDE, LIMITS, buildBrainstormPrompt, buildPrompt, cleanIn, existingQuestions, participantIds, planWrites, validateAnalysis, validateBrainstorm } from './logic.ts';
 import type { Bundle, Plan } from './logic.ts';
 import { handleSelfTest } from './selftest.ts';
 
@@ -18,10 +18,13 @@ export type Deps = {
   log?: (event: string, data: Record<string, unknown>) => void; // ids, counts, timings and safe reasons only: never member text or keys
   loadBlueprint?: () => Promise<string | null>; // the app blueprint from GitHub; never required, a failure just means no blueprint this time
   latestHumanCommentAt: (ideaId: string) => Promise<string | null>;
-  usage: (ideaId: string, memberId: string, sinceHour: string, sinceDay: string) => Promise<{ ideaLast: string | null; memberHour: number; dayTotal: number }>;
-  recordRun: (row: { idea_id: string; member_id: string; ok: boolean | null; input_tokens: number | null; output_tokens: number | null }) => Promise<string | null>;
+  usage: (ideaId: string | null, memberId: string, sinceHour: string, sinceDay: string) => Promise<{ ideaLast: string | null; memberHour: number; dayTotal: number; brainstormHour?: number; brainstormLast?: string | null }>;
+  loadBoard?: () => Promise<{ title: string; status: string; summary?: string | null }[]>; // the ideas on the board, for brainstorming
+  loadFeatures?: () => Promise<{ name: string; description: string; version?: string | null }[]>; // what is built, for brainstorming
+  webSearch?: boolean; // brainstorm may search the web (AI_WEB_SEARCH=off turns it off)
+  recordRun: (row: { idea_id: string | null; member_id: string; ok: boolean | null; input_tokens: number | null; output_tokens: number | null }) => Promise<string | null>;
   finishRun: (runId: string | null, ok: boolean, inputTokens: number | null, outputTokens: number | null) => Promise<void>;
-  callClaude: (system: string, user: string, tool: unknown, model?: string, advisor?: string | null) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null; advisor?: string | null; advisorCalls?: number; advisorErrors?: string[]; fellBack?: boolean; fallbackReason?: string | null }>;
+  callClaude: (system: string, user: string, tool: unknown, model?: string, advisor?: string | null, opts?: { advisorGuide?: string; maxTokens?: number; webSearch?: boolean; webGuide?: string }) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null; advisor?: string | null; advisorCalls?: number; advisorErrors?: string[]; advisorModelSeen?: string | null; advisorInputTokens?: number; advisorOutputTokens?: number; webSearches?: number; webErrors?: string[]; degraded?: string[]; fellBack?: boolean; fallbackReason?: string | null }>;
   save: (ideaId: string, plan: Plan) => Promise<void>;
 };
 
@@ -48,7 +51,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
 
   const log = deps.log || (() => {});
   // The body is read once, up front, only so the self-test (key-protected, made-up data) can be told apart from a member's request.
-  let body: { idea_id?: unknown; force?: unknown; action?: unknown; model?: unknown } = {};
+  let body: { idea_id?: unknown; force?: unknown; action?: unknown; model?: unknown; seen?: unknown } = {};
   let badBody = false;
   try { body = await req.json(); } catch (_) { badBody = true; }
   if (body && body.action === 'selftest') return handleSelfTest(req, deps, body);
@@ -61,6 +64,9 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   if (!userId) return json(401, { error: 'Sign in first.' });
   const member = await deps.getMember(userId).catch(() => null);
   if (!member) return json(403, { error: 'Only members can use the assistant.' });
+
+  // Brainstorm: AI-written starter ideas for the group to browse (see brainstormFlow below).
+  if (body && body.action === 'brainstorm') return brainstormFlow(deps, userId, body.seen, log);
 
   // 2. What are they asking about?
   if (badBody || !body || typeof body !== 'object') return json(400, { error: 'Bad request.' });
@@ -107,7 +113,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     await deps.finishRun(runId, false, null, null).catch(() => {});
     return json(502, { error: 'The assistant is not available right now. Try again in a minute.' }); // the reason goes to the log, never to the member
   }
-  log('claude_ok', { idea_id: ideaId, ms: deps.now().getTime() - t0, input_tokens: result.inputTokens, output_tokens: result.outputTokens, advisor_calls: result.advisorCalls ?? 0, advisor_errors: result.advisorErrors ?? [], fell_back: result.fellBack ?? false, fallback_reason: result.fallbackReason ?? null });
+  log('claude_ok', { idea_id: ideaId, ms: deps.now().getTime() - t0, input_tokens: result.inputTokens, output_tokens: result.outputTokens, advisor_calls: result.advisorCalls ?? 0, advisor_errors: result.advisorErrors ?? [], advisor_model_seen: result.advisorModelSeen ?? null, advisor_tokens: [result.advisorInputTokens ?? 0, result.advisorOutputTokens ?? 0], fell_back: result.fellBack ?? false, fallback_reason: result.fallbackReason ?? null });
 
   // 5. Check what came back, then save only what we allow.
   const analysis = validateAnalysis(result.input, { existing: existingQuestions(bundle.idea, bundle.comments), participants: participantIds(bundle).length });
@@ -127,4 +133,51 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   await deps.finishRun(runId, true, result.inputTokens, result.outputTokens).catch(() => {});
   log('saved', { idea_id: ideaId, status: (plan.ideaPatch.status as string) || bundle.idea.status, asked: plan.newComments.length, ready: analysis.ready });
   return json(200, { ok: true, status: (plan.ideaPatch.status as string) || bundle.idea.status, asked: plan.newComments.length, ready: analysis.ready, blueprint: !!blueprint });
+}
+
+// ---------------------------------------------------------------- brainstorm
+// A member opens Brainstorm and gets a batch of starter ideas (a short title and a few sentences each). Nothing is saved here and no
+// idea is created: when a member likes one, the app adds it under their own name through the normal "new idea" path.
+// It uses the same assistant (Haiku with the Opus advisor, which it is asked to consult first) and counts against the same limits.
+export const BRAINSTORM_LIMITS = { cooldownSec: 20, memberHourly: 6 };
+
+async function brainstormFlow(deps: Deps, userId: string, seenIn: unknown, log: (e: string, d: Record<string, unknown>) => void): Promise<Response> {
+  const now = deps.now();
+  const u = await deps.usage(null, userId, new Date(now.getTime() - 3600_000).toISOString(), new Date(now.getTime() - 86_400_000).toISOString());
+  if (u.brainstormLast && now.getTime() - new Date(u.brainstormLast).getTime() < BRAINSTORM_LIMITS.cooldownSec * 1000) {
+    log('limit', { member_id: userId, which: 'brainstorm_cooldown' });
+    return json(429, { error: 'Give it a few seconds, then ask for more ideas.', retry_after: BRAINSTORM_LIMITS.cooldownSec });
+  }
+  if ((u.brainstormHour ?? 0) >= BRAINSTORM_LIMITS.memberHourly) { log('limit', { member_id: userId, which: 'brainstorm_hour' }); return json(429, { error: 'You have brainstormed a lot this hour. Try again later.' }); }
+  if (u.dayTotal >= deps.limits.dailyCap) { log('limit', { member_id: userId, which: 'day' }); return json(429, { error: 'The assistant has reached its limit for today. Try again tomorrow.' }); }
+  if (u.memberHour >= deps.limits.memberHourly) { log('limit', { member_id: userId, which: 'hour' }); return json(429, { error: 'You have asked the assistant a lot this hour. Try again later.' }); }
+
+  // What the app says it has already shown: only text, capped, cleaned like any other member text.
+  const seen = (Array.isArray(seenIn) ? seenIn : []).filter((x): x is string => typeof x === 'string').slice(0, LIMITS.maxSeen).map((x) => cleanIn(x, LIMITS.maxStubTitle)).filter(Boolean);
+  const board = deps.loadBoard ? await deps.loadBoard().catch(() => []) : [];
+  const features = deps.loadFeatures ? await deps.loadFeatures().catch(() => []) : [];
+  const blueprint = deps.loadBlueprint ? await deps.loadBlueprint().catch(() => null) : null;
+
+  const runId = await deps.recordRun({ idea_id: null, member_id: userId, ok: null, input_tokens: null, output_tokens: null });
+  const prompt = buildBrainstormPrompt({ board, features, seen }, blueprint);
+  log('brainstorm_start', { member_id: userId, board_ideas: board.length, features: features.length, seen: seen.length, web_search: deps.webSearch !== false, blueprint_chars: blueprint ? blueprint.length : 0, model: deps.model ?? null, advisor: deps.advisor ?? null });
+  const t0 = now.getTime();
+  let result;
+  try {
+    result = await deps.callClaude(prompt.system, prompt.user, prompt.tool, undefined, undefined, { advisorGuide: BRAINSTORM_ADVISOR_GUIDE, maxTokens: 2800, webSearch: deps.webSearch !== false, webGuide: BRAINSTORM_WEB_GUIDE });
+  } catch (e) {
+    log('claude_error', { member_id: userId, reason: safeReason(e), ms: deps.now().getTime() - t0 });
+    await deps.finishRun(runId, false, null, null).catch(() => {});
+    return json(502, { error: 'The assistant is not available right now. Try again in a minute.' });
+  }
+  log('claude_ok', { member_id: userId, ms: deps.now().getTime() - t0, input_tokens: result.inputTokens, output_tokens: result.outputTokens, advisor_calls: result.advisorCalls ?? 0, advisor_errors: result.advisorErrors ?? [], advisor_model_seen: result.advisorModelSeen ?? null, advisor_tokens: [result.advisorInputTokens ?? 0, result.advisorOutputTokens ?? 0], web_searches: result.webSearches ?? 0, web_errors: result.webErrors ?? [], degraded: result.degraded ?? [], fell_back: result.fellBack ?? false, fallback_reason: result.fallbackReason ?? null });
+  const ideas = validateBrainstorm(result.input, { board, seen });
+  if (!ideas) {
+    log('bad_answer', { member_id: userId });
+    await deps.finishRun(runId, false, result.inputTokens, result.outputTokens).catch(() => {});
+    return json(502, { error: 'The assistant gave an answer the app could not use. Try again.' });
+  }
+  await deps.finishRun(runId, true, result.inputTokens, result.outputTokens).catch(() => {});
+  log('brainstorm_done', { member_id: userId, ideas: ideas.length });
+  return json(200, { ok: true, ideas });
 }

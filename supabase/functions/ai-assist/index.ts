@@ -75,10 +75,13 @@ const deps: Deps = {
   },
 
   async usage(ideaId, memberId, sinceHour, sinceDay) {
-    const last = await db.from('ai_runs').select('created_at').eq('idea_id', ideaId).order('created_at', { ascending: false }).limit(1);
+    const last = ideaId ? await db.from('ai_runs').select('created_at').eq('idea_id', ideaId).order('created_at', { ascending: false }).limit(1) : { data: null };
     const hour = await db.from('ai_runs').select('id', { count: 'exact', head: true }).eq('member_id', memberId).gte('created_at', sinceHour);
     const day = await db.from('ai_runs').select('id', { count: 'exact', head: true }).gte('created_at', sinceDay);
-    return { ideaLast: last.data && last.data[0] ? last.data[0].created_at : null, memberHour: hour.count || 0, dayTotal: day.count || 0 };
+    // Brainstorm runs have no idea; they count toward the same limits and have their own, smaller hourly limit.
+    const bHour = await db.from('ai_runs').select('id', { count: 'exact', head: true }).eq('member_id', memberId).is('idea_id', null).gte('created_at', sinceHour);
+    const bLast = await db.from('ai_runs').select('created_at').eq('member_id', memberId).is('idea_id', null).order('created_at', { ascending: false }).limit(1);
+    return { ideaLast: last.data && last.data[0] ? last.data[0].created_at : null, memberHour: hour.count || 0, dayTotal: day.count || 0, brainstormHour: bHour.count || 0, brainstormLast: bLast.data && bLast.data[0] ? bLast.data[0].created_at : null };
   },
 
   async recordRun(row) {
@@ -91,7 +94,12 @@ const deps: Deps = {
     await db.from('ai_runs').update({ ok, input_tokens: inputTokens, output_tokens: outputTokens }).eq('id', runId);
   },
 
-  callClaude: (system, user, tool, model, advisor) => claude(system, user, tool, model, advisor),
+  callClaude: (system, user, tool, model, advisor, opts) => claude(system, user, tool, model, advisor, opts),
+
+  async loadBoard() {
+    const { data } = await db.from('ideas').select('title,status').order('created_at', { ascending: false }).limit(60);
+    return (data || []).map((o: { title: string; status: string }) => ({ title: o.title, status: o.status }));
+  },
 
   async save(ideaId, plan) {
     // Comments first, then the idea's update, so the "last updated" time is after the questions it asked.

@@ -251,6 +251,15 @@ textarea.field{min-height:120px;resize:none}
 .use{text-align:center;padding:12vh 24px}
 .use .flag{width:72px;height:72px;border-radius:50%;background:var(--soft);color:var(--green);display:grid;place-items:center;margin:0 auto 14px}
 .use h2{margin:0 0 6px}
+.bs-head h2{margin:6px 4px 2px}.bs-head p{margin:0 4px 12px;font-size:14px}
+.stub-wrap{position:relative;margin-bottom:12px;border-radius:18px;overflow:hidden}
+.stub-bg{position:absolute;inset:0;display:flex;align-items:center;gap:8px;padding:0 22px;font-weight:700;opacity:0;transition:opacity .12s}
+.stub-bg.add{background:var(--green);color:var(--on-green);justify-content:flex-start}.stub-bg.skip{background:#7d877d;color:#fff;justify-content:flex-end}
+.stub-wrap.drag-r .stub-bg.add,.stub-wrap.drag-l .stub-bg.skip{opacity:.55}.stub-wrap.arm-add .stub-bg.add,.stub-wrap.arm-skip .stub-bg.skip{opacity:1}
+.stub{position:relative;background:var(--card);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);touch-action:pan-y;transition:transform .2s}
+.stub h3{margin:0 0 6px;font-size:18px;overflow-wrap:anywhere}.stub p{margin:0 0 12px;color:var(--ink2);overflow-wrap:anywhere}
+.stub-actions{display:flex;gap:10px;justify-content:flex-end}.stub-actions .btn{padding:8px 16px}
+.bs-more{text-align:center;padding:8px 0 18px}.bs-more .btn{margin-top:4px}
 .f-card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
 .f-card h3{margin:0 0 4px;font-size:16px}
 .f-link{display:inline-flex;align-items:center;gap:4px;color:var(--green);font-weight:700;font-size:14px;margin-top:8px}
@@ -270,7 +279,7 @@ const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const app = document.getElementById('app');
-const APP_VERSION = '0.5.14';
+const APP_VERSION = '0.5.15';
 // feed: cached list; threads: cached idea pages; open: comment threads expanded; LK: like counts and whether I liked
 const SORTS = { new: 'New', popular: 'Popular', top: 'Top all time' };
 const savedSort = (() => { try { return localStorage.getItem('bdg.sort'); } catch (_) { return null; } })();
@@ -344,7 +353,7 @@ function toast(msg) {
 // ---------- routing: #/use, #/create/ideas, #/create/ideas/<id>, #/create/features
 function route() {
   const p = location.hash.replace(/^#\/?/, '').split('/');
-  return { mode: p[0] === 'create' ? 'create' : 'use', tab: p[1] === 'features' ? 'features' : 'ideas', id: p[0] === 'create' && (p[1] === 'ideas' || p[1] === 'features') ? (p[2] || null) : null };
+  return { mode: p[0] === 'create' ? 'create' : 'use', tab: p[1] === 'features' ? 'features' : p[1] === 'brainstorm' ? 'brainstorm' : 'ideas', id: p[0] === 'create' && (p[1] === 'ideas' || p[1] === 'features') ? (p[2] || null) : null };
 }
 // Where "back" goes from a discussion: the tab it was opened from.
 function backHash() { return '#/create/' + (route().tab === 'features' ? 'features' : 'ideas'); }
@@ -438,10 +447,11 @@ function joinScreen(msg, { code = false } = {}) {
 }
 
 // ---------- shell: header, page, bottom tabs or comment bar
-function shell(r, inner, { thread = null } = {}) {
+function shell(r, inner, { thread = null, back = null } = {}) {
   document.body.className = thread ? 'composing' : (r.mode === 'create' ? 'tabs' : '');
   const left = thread
     ? `<button class="back" data-go="${backHash()}" aria-label="Back">${icon('back', 26)}<span>${r.tab === 'features' ? 'Features' : 'Ideas'}</span></button>`
+    : back ? `<button class="back" data-go="${back.hash}" aria-label="Back">${icon('back', 26)}<span>${esc(back.label)}</span></button>`
     : `<h1>BC Dads Golf</h1>`;
   app.innerHTML = `<header class="top">${left}
     <div class="seg"><button data-go="#/use" class="${r.mode === 'use' ? 'on' : ''}">Use</button>
@@ -449,7 +459,7 @@ function shell(r, inner, { thread = null } = {}) {
     <main>${storageOk() ? '' : `<div class="card err">${esc(NO_STORAGE)}</div>`}${inner}
     ${thread ? '' : `<p class="foot">BC Dads Golf v${APP_VERSION}</p>`}</main>
     ${thread ? composerHTML(thread) : r.mode === 'create' ? `<nav class="tabs">
-      <button data-go="#/create/ideas" class="${r.tab === 'ideas' ? 'on' : ''}">${icon('ideas', 22)}Ideas</button>
+      <button data-go="#/create/ideas" class="${r.tab === 'ideas' || r.tab === 'brainstorm' ? 'on' : ''}">${icon('ideas', 22)}Ideas</button>
       <button data-go="#/create/features" class="${r.tab === 'features' ? 'on' : ''}">${icon('star', 22)}Features</button></nav>` : ''}`;
 }
 
@@ -463,6 +473,7 @@ async function render() {
   }
   if (r.id) return renderThread(r.id);
   if (r.tab === 'features') return renderFeatures(r);
+  if (r.tab === 'brainstorm') return renderBrainstorm(r);
   return renderFeed(r);
 }
 
@@ -578,7 +589,7 @@ async function loadFeed() {
 function feedHTML() {
   const list = sortIdeas(S.feed || [], S.sort);
   return `<button class="prompt" data-act="new-idea">${avatar(S.me.name, 38)}<span class="ptext">What should the app do?</span>${icon('image', 22)}</button>
-    <div class="feedbar">${S.me.is_admin ? `<button class="sortbtn" data-act="invite" style="margin-right:auto" aria-label="Invite someone">${icon('userplus', 18)}Invite</button>` : ''}<button class="sortbtn" data-act="sort-menu" aria-label="Sort posts" aria-haspopup="true">${esc(SORTS[S.sort])}${icon('menu', 18)}</button></div>
+    <div class="feedbar">${S.me.is_admin ? `<button class="sortbtn" data-act="invite" aria-label="Invite someone">${icon('userplus', 18)}Invite</button>` : ''}<button class="sortbtn" data-act="brainstorm" style="margin-right:auto" aria-label="Brainstorm ideas">${icon('sparkle', 18)}Brainstorm</button><button class="sortbtn" data-act="sort-menu" aria-label="Sort posts" aria-haspopup="true">${esc(SORTS[S.sort])}${icon('menu', 18)}</button></div>
     ${list.length ? list.map(postCard).join('') : `<div class="empty">${icon('ideas', 40)}<p>No ideas here right now. Post one, or see what has been built on the Features tab.</p></div>`}`;
 }
 // New: newest first. Popular: likes and comments, fading as a post goes quiet (so fresh activity lifts it again).
@@ -1094,9 +1105,79 @@ async function renderFeatures(r) {
   } catch (e) { toastFail(e); }
 }
 
+// ---------- brainstorm: starter ideas written by the assistant. Swipe right to add one to the board, left to skip it.
+// Nothing is saved until a member adds one, and then it is an ordinary idea under their own name.
+const BS_TTL = 6 * 3600e3;
+let bsN = 0;
+const bsKey = () => 'bdg.brainstorm.' + uid();
+function bsRestore() {
+  try {
+    const j = JSON.parse(localStorage.getItem(bsKey()) || 'null');
+    if (j && Date.now() - j.at < BS_TTL && Array.isArray(j.items) && Array.isArray(j.seen)) return j;
+  } catch (_) {}
+  return null;
+}
+function bsSave() {
+  try { localStorage.setItem(bsKey(), JSON.stringify({ at: S.bs.at, items: S.bs.items.filter(x => x.state === 'new'), seen: S.bs.seen.slice(-60) })); } catch (_) {}
+}
+const bsClean = (t, n) => (typeof t === 'string' ? t : '').replace(/[\u0000-\u001F]/g, ' ').trim().slice(0, n);
+function bsDraw() {
+  const el = $('#bs'); if (!el || !S.bs) return;
+  const b = S.bs, live = b.items.filter(x => x.state === 'new' || x.state === 'adding');
+  el.innerHTML = `<div class="bs-head"><h2>Brainstorm</h2><p class="muted">Starter ideas from the assistant. Swipe a card right to add it to the board, or left to skip it.</p></div>
+    ${live.map(x => `<div class="stub-wrap" data-sid="${esc(x.id)}"><div class="stub-bg add">${icon('plus', 20)}Add idea</div><div class="stub-bg skip">Skip${icon('x', 20)}</div>
+      <article class="stub"><h3>${esc(x.title)}</h3><p>${esc(x.description)}</p>
+        <div class="stub-actions"><button class="btn ghost" data-bs="skip:${esc(x.id)}" ${x.state === 'adding' ? 'disabled' : ''}>Skip</button>
+          <button class="btn" data-bs="add:${esc(x.id)}" ${x.state === 'adding' ? 'disabled' : ''}>${x.state === 'adding' ? 'Adding...' : 'Add to board'}</button></div></article></div>`).join('')}
+    ${b.loading ? feedSkeleton() : ''}
+    ${b.error && !b.loading ? `<div class="card err"><p style="margin:0 0 8px">${esc(b.error)}</p><button class="btn" data-bs="retry">Try again</button></div>` : ''}
+    ${!b.loading && !b.error ? `<div class="bs-more">${live.length ? '' : '<p class="muted">That is all of them for now.</p>'}<button class="btn ghost" data-bs="more">${live.length ? 'More ideas' : 'Get more ideas'}</button></div>` : ''}`;
+}
+async function bsFetch() {
+  const b = S.bs; if (!b || b.loading) return;
+  b.loading = true; b.error = ''; bsDraw();
+  try {
+    const { data, error } = await sb.functions.invoke('ai-assist', { body: { action: 'brainstorm', seen: b.seen.slice(-30) } });
+    if (error) {
+      let msg = ''; try { msg = (await error.context.json()).error; } catch (_) {}
+      throw new Error(msg === 'Bad idea id.' ? 'Brainstorm is not switched on yet. Try again in a minute.' : msg || 'The assistant is not available right now.');
+    }
+    const ideas = (Array.isArray(data?.ideas) ? data.ideas : []).map(x => ({ title: bsClean(x?.title, 90), description: bsClean(x?.description, 420) })).filter(x => x.title.length >= 3 && x.description);
+    if (!ideas.length) throw new Error('No ideas came back. Try again.');
+    for (const x of ideas) { b.items.push({ id: 'bs' + (++bsN) + Date.now().toString(36), title: x.title, description: x.description, state: 'new' }); b.seen.push(x.title); }
+    b.at = Date.now(); bsSave();
+  } catch (e) { b.error = e.message || 'Something went wrong. Try again.'; }
+  finally { b.loading = false; if (S.me && route().tab === 'brainstorm') bsDraw(); }
+}
+async function bsAct(what) {
+  const [act, id] = what.split(':'), b = S.bs; if (!b) return;
+  if (act === 'more' || act === 'retry') return bsFetch();
+  const it = b.items.find(x => x.id === id); if (!it || it.state !== 'new') return;
+  if (act === 'skip') { it.state = 'skipped'; bsSave(); return bsDraw(); }
+  if (act !== 'add') return;
+  it.state = 'adding'; bsDraw();
+  try {
+    const { data, error } = await sb.from('ideas').insert({ author_id: uid(), title: it.title, body: it.description }).select('id').single();
+    if (error) throw error;
+    it.state = 'added'; S.feed = null; bsSave(); haptic(); toast('Added to the board');
+    askAI(data.id); // the assistant summarizes it like any new idea
+  } catch (e) { it.state = 'new'; toastFail(e); }
+  finally { if (S.me && route().tab === 'brainstorm') bsDraw(); }
+}
+async function renderBrainstorm(r) {
+  shell(r, `<div id="bs"></div>`, { back: { hash: '#/create/ideas', label: 'Ideas' } });
+  if (!S.bs || S.bs.uid !== uid()) {
+    const c = bsRestore();
+    S.bs = { uid: uid(), items: c ? c.items.map(x => ({ id: 'bs' + (++bsN), title: bsClean(x.title, 90), description: bsClean(x.description, 420), state: 'new' })).filter(x => x.title && x.description) : [], seen: c ? c.seen.filter(x => typeof x === 'string') : [], at: c ? c.at : 0, loading: false, error: '' };
+  }
+  bsDraw();
+  if (!S.bs.items.some(x => x.state === 'new') && !S.bs.loading && !S.bs.error && !S.bs.fetchedOnce) { S.bs.fetchedOnce = true; bsFetch(); }
+}
+
 // ---------- one tap handler for the whole app
 const ACT = {
   'new-idea': () => newIdeaSheet(),
+  'brainstorm': () => go('#/create/brainstorm'),
   'sort-menu': () => toggleSortMenu(),
   'invite': () => inviteSheet(),
   'invite-make': a => makeInvite(a),
@@ -1120,7 +1201,7 @@ const ACT = {
 document.addEventListener('click', e => {
   if (G_swipedEl && Date.now() - G_swipedAt < 350 && G_swipedEl.contains(e.target)) return; // that was the end of a swipe, not a tap
   if (!e.target.closest('.menu,[data-act="sort-menu"]')) closeSortMenu();
-  const a = e.target.closest('[data-go],[data-act],[data-like],[data-vote],[data-reply],[data-spin],[data-more],[data-delpoll],[data-sort],[data-lb],[data-stop],[data-open]');
+  const a = e.target.closest('[data-go],[data-act],[data-like],[data-vote],[data-reply],[data-spin],[data-bs],[data-more],[data-delpoll],[data-sort],[data-lb],[data-stop],[data-open]');
   if (!a) return;
   const d = a.dataset;
   if (d.go) return go(d.go);
@@ -1141,6 +1222,7 @@ document.addEventListener('click', e => {
     const f = $('#feed'); if (f) f.innerHTML = feedHTML(); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
   }
   if (d.spin) return spinSheet(d.spin);
+  if (d.bs) return bsAct(d.bs);
   if (d.lb) return lightbox(d.lb);
   if (d.act) return ACT[d.act] && ACT[d.act](a, e);
   if ('stop' in d) return; // taps inside a poll card do not open the idea
@@ -1164,6 +1246,7 @@ document.addEventListener('touchstart', e => {
   const t = e.touches[0], r = route();
   G = { x0: t.clientX, y0: t.clientY, dx: 0, dy: 0, lock: null, moved: false, type: null };
   if (r.id && t.clientX < 28) G.type = 'edge';
+  else if (e.target.closest('.stub')) { G.type = 'stub'; G.stub = e.target.closest('.stub'); G.wrap = G.stub.parentElement; }
   else if (e.target.closest('.c-row')) { G.type = 'row'; G.row = e.target.closest('.c-row'); G.main = G.row.querySelector('.c-main'); }
   else if (!r.id && r.mode === 'create' && r.tab === 'ideas' && window.scrollY <= 0) G.type = 'pull';
 }, { passive: true });
@@ -1176,6 +1259,11 @@ document.addEventListener('touchmove', e => {
     const d = Math.max(canLeft ? -84 : 0, Math.min(84, G.dx * .6));
     G.main.style.transition = 'none'; G.main.style.transform = `translateX(${d}px)`;
     G.row.classList.toggle('arm-r', G.dx > 70); G.row.classList.toggle('arm-l', canLeft && G.dx < -70);
+  } else if (G.type === 'stub' && G.lock === 'x') {
+    const d = Math.max(-150, Math.min(150, G.dx));
+    G.stub.style.transition = 'none'; G.stub.style.transform = `translateX(${d}px)`;
+    G.wrap.classList.toggle('drag-r', d > 0); G.wrap.classList.toggle('drag-l', d < 0);
+    G.wrap.classList.toggle('arm-add', G.dx > 90); G.wrap.classList.toggle('arm-skip', G.dx < -90);
   } else if (G.type === 'edge' && G.lock === 'x' && G.dx > 0) {
     const tv = $('#tv'); if (tv) { tv.style.transition = 'none'; tv.style.transform = `translateX(${G.dx * .55}px)`; tv.style.opacity = String(Math.max(.4, 1 - G.dx / 600)); }
   } else if (G.type === 'pull' && G.lock === 'y' && G.dy > 0 && window.scrollY <= 0) {
@@ -1184,13 +1272,20 @@ document.addEventListener('touchmove', e => {
 }, { passive: true });
 document.addEventListener('touchend', e => {
   const g = G; G = null;
-  if (g && g.moved) { G_swipedAt = Date.now(); G_swipedEl = g.type === 'row' ? g.row : g.type === 'edge' ? $('#tv') : g.type === 'pull' ? $('main') : null; }
+  if (g && g.moved) { G_swipedAt = Date.now(); G_swipedEl = g.type === 'row' ? g.row : g.type === 'stub' ? g.stub : g.type === 'edge' ? $('#tv') : g.type === 'pull' ? $('main') : null; }
   if (g && g.type === 'row') {
     g.main.style.transition = ''; g.main.style.transform = '';
     const armR = g.row.classList.contains('arm-r'), armL = g.row.classList.contains('arm-l');
     g.row.classList.remove('arm-r', 'arm-l');
     if (g.lock === 'x' && armR) { haptic(); startReply(g.row.dataset.cid); }
     else if (g.lock === 'x' && armL) { haptic(); delComment(g.row.dataset.cid); }
+  }
+  if (g && g.type === 'stub') {
+    g.stub.style.transition = ''; g.stub.style.transform = '';
+    const add = g.wrap.classList.contains('arm-add'), skip = g.wrap.classList.contains('arm-skip');
+    g.wrap.classList.remove('drag-r', 'drag-l', 'arm-add', 'arm-skip');
+    if (g.lock === 'x' && add) { haptic(); bsAct('add:' + g.wrap.dataset.sid); }
+    else if (g.lock === 'x' && skip) { haptic(); bsAct('skip:' + g.wrap.dataset.sid); }
   }
   if (g && g.type === 'edge') {
     const tv = $('#tv'); if (tv) { tv.style.transition = 'transform .2s, opacity .2s'; tv.style.transform = ''; tv.style.opacity = ''; }

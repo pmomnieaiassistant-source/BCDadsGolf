@@ -8,6 +8,8 @@
 // If the advisor way fails for any reason, the same question is asked the plain way, so the advisor can never break the assistant.
 import { ADVISOR_GUIDE } from './logic.ts';
 
+export type CallOpts = { advisorGuide?: string; maxTokens?: number }; // brainstorm uses its own guide and a smaller cap
+
 export const ADVISOR_TOOL_TYPE = 'advisor_20260301';
 export const ADVISOR_BETA = 'advisor-tool-2026-03-01';
 // Models that accept a forced tool choice. Every other model (Sonnet 5.5, Opus 5.5, ...) rejects it with a 400.
@@ -67,10 +69,10 @@ export function makeClaude(cfg: ClaudeConfig) {
 
   const answerOf = (out: Json, toolName: string): Json => (out?.content || []).find((b: Json) => b?.type === 'tool_use' && b.name === toolName);
 
-  async function plain(model: string, system: string, user: string, tool: Json): Promise<Omit<ClaudeResult, 'advisor' | 'fellBack' | 'fallbackReason'>> {
+  async function plain(model: string, system: string, user: string, tool: Json, opts: CallOpts): Promise<Omit<ClaudeResult, 'advisor' | 'fellBack' | 'fallbackReason'>> {
     const forced = FORCED_TOOL_OK.has(model);
     const out = await post({
-      model, max_tokens: maxTokens, system,
+      model, max_tokens: opts.maxTokens ?? maxTokens, system,
       messages: [{ role: 'user', content: user }],
       tools: [tool],
       ...(forced ? { tool_choice: { type: 'tool', name: tool.name } } : {}),
@@ -80,14 +82,14 @@ export function makeClaude(cfg: ClaudeConfig) {
     return { input: block.input, inputTokens: out.usage?.input_tokens ?? null, outputTokens: out.usage?.output_tokens ?? null, advisorCalls: 0, advisorErrors: [] };
   }
 
-  async function withAdvisor(model: string, advisor: string, system: string, user: string, tool: Json): Promise<Omit<ClaudeResult, 'advisor' | 'fellBack' | 'fallbackReason'>> {
+  async function withAdvisor(model: string, advisor: string, system: string, user: string, tool: Json, opts: CallOpts): Promise<Omit<ClaudeResult, 'advisor' | 'fellBack' | 'fallbackReason'>> {
     const messages: Json[] = [{ role: 'user', content: user }];
     let inTok = 0, outTok = 0, advisorCalls = 0;
     const advisorErrors: string[] = [];
     for (let turn = 0; turn < LIMITS_CLAUDE.maxTurns; turn++) {
       const out = await post({
-        model, max_tokens: maxTokens,
-        system: `${system}\n\n${ADVISOR_GUIDE}`,
+        model, max_tokens: opts.maxTokens ?? maxTokens,
+        system: `${system}\n\n${opts.advisorGuide ?? ADVISOR_GUIDE}`,
         messages,
         tools: [tool, { type: ADVISOR_TOOL_TYPE, name: 'advisor', model: advisor, max_uses: 1 }],
         // no tool_choice: forcing the answer tool would stop the model from ever consulting the advisor
@@ -108,16 +110,16 @@ export function makeClaude(cfg: ClaudeConfig) {
   }
 
   // modelOverride / advisorOverride are for the self-test only. advisorOverride: undefined = the live setting, null = no advisor.
-  return async function callClaude(system: string, user: string, tool: unknown, modelOverride?: string, advisorOverride?: string | null): Promise<ClaudeResult> {
+  return async function callClaude(system: string, user: string, tool: unknown, modelOverride?: string, advisorOverride?: string | null, opts: CallOpts = {}): Promise<ClaudeResult> {
     const model = modelOverride || cfg.model;
     const advisor = advisorOverride === undefined ? cfg.advisor : advisorOverride;
     const t = tool as Json;
-    if (!advisor) return { ...(await plain(model, system, user, t)), advisor: null, fellBack: false, fallbackReason: null };
+    if (!advisor) return { ...(await plain(model, system, user, t, opts)), advisor: null, fellBack: false, fallbackReason: null };
     try {
-      return { ...(await withAdvisor(model, advisor, system, user, t)), advisor, fellBack: false, fallbackReason: null };
+      return { ...(await withAdvisor(model, advisor, system, user, t, opts)), advisor, fellBack: false, fallbackReason: null };
     } catch (e) {
       const reason = reasonOf(e);
-      return { ...(await plain(model, system, user, t)), advisor, fellBack: true, fallbackReason: reason };
+      return { ...(await plain(model, system, user, t, opts)), advisor, fellBack: true, fallbackReason: reason };
     }
   };
 }

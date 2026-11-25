@@ -3,7 +3,7 @@
 //
 // It sits behind the same secret key as the agent door (header x-agent-key). It uses made-up ideas only: no member data
 // is read or written, nothing is saved, and the answer never contains a key. Three tiny Claude calls, at most one test per 20 seconds.
-import { buildPrompt, validateAnalysis } from './logic.ts';
+import { BRAINSTORM_ADVISOR_GUIDE, buildBrainstormPrompt, buildPrompt, validateAnalysis, validateBrainstorm } from './logic.ts';
 import type { Bundle } from './logic.ts';
 
 export type SelfTestDeps = {
@@ -12,7 +12,7 @@ export type SelfTestDeps = {
   now: () => Date;
   loadBlueprint?: () => Promise<string | null>;
   advisor?: string | null;
-  callClaude: (system: string, user: string, tool: unknown, model?: string, advisor?: string | null) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null; advisorCalls?: number; advisorErrors?: string[]; fellBack?: boolean; fallbackReason?: string | null }>;
+  callClaude: (system: string, user: string, tool: unknown, model?: string, advisor?: string | null, opts?: { advisorGuide?: string; maxTokens?: number }) => Promise<{ input: unknown; inputTokens: number | null; outputTokens: number | null; advisorCalls?: number; advisorErrors?: string[]; fellBack?: boolean; fallbackReason?: string | null }>;
 };
 
 export const SELFTEST_GAP_MS = 20_000;
@@ -53,6 +53,19 @@ const answeredBundle = (): Bundle => ({
   polls: [],
 });
 
+// A fourth idea, only when asked for (strategic): it overlaps ideas on a made-up board and its questions are settled, so it looks ready.
+// These are the situations where the assistant is told to consult its advisor.
+const strategicBundle = (): Bundle => ({
+  idea: { id: 'selftest', title: 'Let each round use a different scoring format', body: 'Before each round the group picks stableford, stroke play or skins, and the app scores it that way.', status: 'open', summary: null, open_questions: [], spec: null, ai_updated_at: null, author_id: 't1', author_name: 'Tester One' },
+  comments: [
+    { id: 'q1', parent_id: null, is_ai: true, kind: 'question', body: 'Is the format chosen once per round, or can it change hole by hole?', author_id: null, author_name: '', created_at: '2026-01-01T00:00:00Z' },
+    { id: 'a1', parent_id: 'q1', is_ai: false, kind: 'comment', body: 'Once per round, picked before the first tee.', author_id: 't2', author_name: 'Tester Two', created_at: '2026-01-01T00:01:00Z' },
+    { id: 'a2', parent_id: 'q1', is_ai: false, kind: 'comment', body: 'Agreed, once per round.', author_id: 't3', author_name: 'Tester Three', created_at: '2026-01-01T00:02:00Z' },
+  ],
+  polls: [],
+  board: [{ title: 'Stableford scoring', status: 'open' }, { title: 'Skins tracker', status: 'ready' }, { title: 'Season leaderboard', status: 'open' }, { title: 'Handicap tracking', status: 'open' }, { title: 'Pick teams for a scramble', status: 'open' }],
+});
+
 const SCENARIOS: { name: string; expectsExisting: boolean; bundle: Bundle }[] = [
   { name: 'idea for something that already exists', expectsExisting: true,
     bundle: bundle('Show the how-it-works guide when the app opens', 'When someone opens the app, show a short swipeable guide that explains how it works, with a way to hide it.', 'Good idea, new members would find it useful.') },
@@ -67,7 +80,7 @@ const reasonOf = (e: unknown): string => {
   return (e instanceof Error ? e.message : String(e)).replace(/[^\x20-\x7E]/g, '').slice(0, 240);
 };
 
-export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { model?: unknown; advisor?: unknown } = {}): Promise<Response> {
+export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { model?: unknown; advisor?: unknown; consult?: unknown; strategic?: unknown; brainstorm?: unknown } = {}): Promise<Response> {
   // The door stays shut unless a long enough key is set on the server and the caller has it.
   if (!deps.agentKey || deps.agentKey.length < 32) return out(503, { error: 'Self-test is not set up.' });
   const given = req.headers.get('x-agent-key') || '';
@@ -94,10 +107,14 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { m
   lastRun.set(deps, now);
 
   const blueprint = deps.loadBlueprint ? await deps.loadBlueprint().catch(() => null) : null;
+  if (body.brainstorm === true) return brainstormTest(deps, blueprint, model, advisorOverride, advisorUsed);
+  const consult = body.consult === true; // test only: tell the model to consult its advisor, to prove the advisor really answers
+  const list = body.strategic === true ? [...SCENARIOS, { name: 'strategic idea: overlaps the board and looks ready', expectsExisting: false, bundle: strategicBundle() }] : SCENARIOS;
   const scenarios = [];
   let reachable = true, shapeOk = true;
-  for (const s of SCENARIOS) {
+  for (const s of list) {
     const prompt = buildPrompt(s.bundle, blueprint);
+    if (consult) prompt.user += '\n\nFor this test, consult your advisor once before you answer.';
     const t0 = Date.now();
     try {
       const r = await deps.callClaude(prompt.system, prompt.user, prompt.tool, model, advisorOverride);
@@ -124,6 +141,7 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { m
     { name: 'the blueprint loads from GitHub', ok: !!blueprint },
     { name: 'a clearly answered question is recorded as a short question and answer', ok: !!third && Array.isArray(third.answered) && third.answered.length > 0 },
     { name: 'the advisor way works (or there is no advisor): no fallback to the plain way', ok: !advisorUsed || (reachable && !fellBack) },
+    ...(consult ? [{ name: 'the advisor really answers when asked (it was consulted at least once)', ok: !!advisorUsed && (scenarios as { advisor_calls?: number }[]).some((s) => (s.advisor_calls ?? 0) > 0) }] : []),
   ];
   return out(200, {
     ok: checks.every((c) => c.ok),
@@ -132,5 +150,30 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps, body: { m
     advisor: advisorUsed,
     blueprint: { loaded: !!blueprint, chars: blueprint ? blueprint.length : 0, first_line: blueprint ? blueprint.split('\n')[0].slice(0, 80) : null },
     checks, scenarios,
+  });
+}
+
+// The brainstorm feature, end to end on a made-up board: the real prompt, the real Claude call (advisor included), the real checks.
+async function brainstormTest(deps: SelfTestDeps, blueprint: string | null, model: string | undefined, advisorOverride: string | null | undefined, advisorUsed: string | null): Promise<Response> {
+  const board = [{ title: 'Skins tracker', status: 'open' }, { title: 'Handicap tracking', status: 'open' }, { title: 'Season leaderboard', status: 'ready' }, { title: 'Stableford scoring', status: 'open' }];
+  const prompt = buildBrainstormPrompt({ board, seen: [] }, blueprint);
+  const t0 = Date.now();
+  let ideas: ReturnType<typeof validateBrainstorm> = null, error: string | null = null, r: Awaited<ReturnType<SelfTestDeps['callClaude']>> | null = null;
+  try {
+    r = await deps.callClaude(prompt.system, prompt.user, prompt.tool, model, advisorOverride, { advisorGuide: BRAINSTORM_ADVISOR_GUIDE, maxTokens: 2400 });
+    ideas = validateBrainstorm(r.input, { board, seen: [] });
+  } catch (e) { error = reasonOf(e); }
+  const checks = [
+    { name: 'Claude answers (key, model and network are fine)', ok: !error },
+    { name: 'brainstorm returns usable ideas (at least 3, all different from the board)', ok: !!ideas && ideas.length >= 3 },
+    { name: 'the blueprint loads from GitHub', ok: !!blueprint },
+    { name: 'the advisor way works (or there is no advisor): no fallback to the plain way', ok: !error && (!advisorUsed || !r?.fellBack) },
+  ];
+  return out(200, {
+    ok: checks.every((c) => c.ok), mode: 'brainstorm',
+    model: model ?? deps.model ?? null, tried_override: !!model || advisorOverride !== undefined, advisor: advisorUsed,
+    blueprint: { loaded: !!blueprint, chars: blueprint ? blueprint.length : 0, first_line: blueprint ? blueprint.split('\n')[0].slice(0, 80) : null },
+    checks,
+    result: { ms: Date.now() - t0, input_tokens: r?.inputTokens ?? null, output_tokens: r?.outputTokens ?? null, advisor_calls: r?.advisorCalls ?? 0, advisor_errors: r?.advisorErrors ?? [], fell_back: r?.fellBack ?? false, fallback_reason: r?.fallbackReason ?? null, error, ideas },
   });
 }

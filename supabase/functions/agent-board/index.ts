@@ -12,7 +12,7 @@ const db = createClient(URL_, env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persis
 // deno-lint-ignore no-explicit-any
 const nameOf = (a: any): string => (Array.isArray(a) ? a[0]?.name : a?.name) || '';
 // Always say WHICH link to members is the author: ideas and comments are linked to members twice (author and likes).
-const IDEA_COLS = 'id,title,body,status,summary,open_questions,spec,built_version,created_at,last_activity_at,author:members!author_id(name)';
+const IDEA_COLS = 'id,title,body,status,summary,open_questions,answered_qa,spec,built_version,created_at,last_activity_at,author:members!author_id(name)';
 
 const deps: Deps = {
   expectedKey: env('AGENT_KEY'),

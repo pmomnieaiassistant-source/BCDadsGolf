@@ -2,7 +2,7 @@
 // the Anthropic key, the model, the forced answer shape, and the blueprint from GitHub.
 //
 // It sits behind the same secret key as the agent door (header x-agent-key). It uses made-up ideas only: no member data
-// is read or written, nothing is saved, and the answer never contains a key. Two tiny Claude calls, at most one test per 20 seconds.
+// is read or written, nothing is saved, and the answer never contains a key. Three tiny Claude calls, at most one test per 20 seconds.
 import { buildPrompt, validateAnalysis } from './logic.ts';
 import type { Bundle } from './logic.ts';
 
@@ -37,11 +37,23 @@ const bundle = (title: string, body: string, reply: string): Bundle => ({
 });
 
 // One idea that the blueprint says already exists (the how-it-works guide) and one that it says does not (a leaderboard).
+// A third idea where the assistant asked a question and the group clearly answered it, so it should be recorded as a short Q&A.
+const answeredBundle = (): Bundle => ({
+  idea: { id: 'selftest', title: 'Season leaderboard', body: 'Rank everyone by stableford points over the season.', status: 'open', summary: null, open_questions: [], spec: null, ai_updated_at: null, author_id: 't1', author_name: 'Tester One' },
+  comments: [
+    { id: 'q1', parent_id: null, is_ai: true, kind: 'question', body: 'How long is a season: a calendar year, or dates the admin sets?', author_id: null, author_name: '', created_at: '2026-01-01T00:00:00Z' },
+    { id: 'a1', parent_id: 'q1', is_ai: false, kind: 'comment', body: 'A calendar year, January to December.', author_id: 't2', author_name: 'Tester Two', created_at: '2026-01-01T00:01:00Z' },
+    { id: 'a2', parent_id: 'q1', is_ai: false, kind: 'comment', body: 'Yes, agreed, calendar year.', author_id: 't1', author_name: 'Tester One', created_at: '2026-01-01T00:02:00Z' },
+  ],
+  polls: [],
+});
+
 const SCENARIOS: { name: string; expectsExisting: boolean; bundle: Bundle }[] = [
   { name: 'idea for something that already exists', expectsExisting: true,
     bundle: bundle('Show the how-it-works guide when the app opens', 'When someone opens the app, show a short swipeable guide that explains how it works, with a way to hide it.', 'Good idea, new members would find it useful.') },
   { name: 'idea for something new', expectsExisting: false,
     bundle: bundle('Season leaderboard', 'Rank everyone by stableford points over the whole season.', 'Maybe only the best 8 rounds should count?') },
+  { name: 'idea where a question was clearly answered', expectsExisting: false, bundle: answeredBundle() },
 ];
 
 const reasonOf = (e: unknown): string => {
@@ -75,7 +87,7 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps): Promise<
       scenarios.push({
         name: s.name, ok: !!a, ms: Date.now() - t0, input_tokens: r.inputTokens, output_tokens: r.outputTokens,
         says_it_exists: /\balready\b|\bexists?\b|\bcurrently\b|\bexisting\b/i.test(text), expected_it_exists: s.expectsExisting,
-        summary: a?.summary ?? null, questions: a ? [...a.open_questions, ...a.new_questions] : [],
+        summary: a?.summary ?? null, questions: a ? [...a.open_questions, ...a.new_questions] : [], answered: a?.answered ?? null,
       });
     } catch (e) {
       reachable = false;
@@ -83,10 +95,12 @@ export async function handleSelfTest(req: Request, deps: SelfTestDeps): Promise<
       break; // the same failure would just repeat
     }
   }
+  const third = scenarios[2] as { answered?: { question: string; answer: string }[] | null } | undefined;
   const checks = [
     { name: 'Claude answers (key, model and network are fine)', ok: reachable },
     { name: 'the answer has the right shape and passes the app checks', ok: reachable && shapeOk },
     { name: 'the blueprint loads from GitHub', ok: !!blueprint },
+    { name: 'a clearly answered question is recorded as a short question and answer', ok: !!third && Array.isArray(third.answered) && third.answered.length > 0 },
   ];
   return out(200, {
     ok: checks.every((c) => c.ok),

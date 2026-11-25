@@ -34,7 +34,7 @@ const deps: Deps = {
 
   async loadBundle(ideaId): Promise<Bundle | null> {
     const { data: idea } = await db.from('ideas')
-      .select('id,title,body,status,summary,open_questions,spec,ai_updated_at,ready_by,author_id,author:members!author_id(name)')
+      .select('id,title,body,status,summary,open_questions,answered_qa,spec,ai_updated_at,ready_by,author_id,author:members!author_id(name)')
       .eq('id', ideaId).maybeSingle();
     if (!idea) return null;
     const { data: comments } = await db.from('comments')
